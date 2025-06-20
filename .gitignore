@@ -1,0 +1,6 @@
+# Fetched data
+alerts.json
+
+# Python cache
+__pycache__/
+*.pyc
