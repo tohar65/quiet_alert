@@ -6,10 +6,6 @@ from colorama import Fore
 from alert_types import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
 
 
-def get_key_by_value(d, value):
-    return next((k for k, v in d.items() if v == value), None)
-
-
 def parse_alert(alert):
     """Converts a single Pikud Haoref alert dict to an Alert object with resolved status and threat type."""
     oref_category = alert.get("category")
@@ -17,12 +13,23 @@ def parse_alert(alert):
     status = CATEGORY_TO_STATUS.get(oref_category)
     threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
 
-    if get_key_by_value(CATEGORY_TO_STATUS, AlertStatus.ENDED) == oref_category:
+    # The category for ended alerts can be inconsistent. A reliable way to identify
+    # them is by checking for "ended" ("הסתיים" or "הסתיימה") in the title.
+    if "הסתיים" in title or "הסתיימה" in title:
+        status = AlertStatus.ENDED
+        
+        # For ended alerts, the threat type must be parsed from the title,
+        # as the category might not be informative.
+        threat_type_from_title = None
         for ttype, pattern in THREAT_PATTERNS.items():
             if pattern.search(title):
-                threat_type = ttype
+                threat_type_from_title = ttype
                 break
+        
+        if threat_type_from_title:
+            threat_type = threat_type_from_title
         else:
+            # If it's an ended alert but we can't determine the type, it's an error.
             raise ValueError(f"Unexpected ended alert type: {title}")
 
     return Alert(
