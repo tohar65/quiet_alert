@@ -13,11 +13,11 @@ def driver():
     yield driver
     driver.quit()
 
-def test_ui_alert_status_updates_correctly(driver, mocker):
+def test_ui_alert_status_updates_correctly(driver, requests_mock):
     # Mock the API response
-    mocker.patch(
-        "alert_parser.fetch_alerts",
-        return_value=json.dumps([{"data": "Red Alert", "title": "Test Alert", "location": "פתח תקווה"}])
+    requests_mock.get(
+        "http://127.0.0.1:8000/api/alerts?location=%D7%A4%D7%AA%D7%97%20%D7%AA%D7%A7%D7%95%D7%95%D7%94",
+        json={"alerts": [{"data": "Red Alert", "title": "Test Alert", "location": "פתח תקווה"}]}
     )
 
     # Navigate to the app
@@ -31,14 +31,13 @@ def test_ui_alert_status_updates_correctly(driver, mocker):
 
     # Wait for the status to update and assert
     WebDriverWait(driver, 10).until(
-        lambda d: "Checking alerts" not in d.find_element(By.ID, "alert-status").text
+        EC.text_to_be_present_in_element((By.ID, "alert-status"), "ALERT!")
     )
     status_div = driver.find_element(By.ID, "alert-status")
-    
+
     # Assert that the "ALERT!" text is present
     assert "ALERT!" in status_div.text
-    
+
     # Assert that the 'alert-active' class is present
     class_attribute = status_div.get_attribute("class")
-    assert class_attribute is not None
     assert "alert-active" in class_attribute

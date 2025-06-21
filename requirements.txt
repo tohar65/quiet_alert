@@ -1,8 +1,10 @@
-requests
-colorama
 fastapi
 uvicorn
-httpx
-pytest-asyncio
+requests
 selenium
 webdriver-manager
+pytest
+pytest-mock
+pytest-asyncio
+anyio
+requests-mock
