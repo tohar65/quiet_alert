@@ -25,11 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.alerts && data.alerts.length > 0) {
-                const alertTitles = data.alerts.map(alert => alert.title).join('<br>');
-                alertStatusDiv.innerHTML = `<strong>ALERT ACTIVE</strong><br>${alertTitles}`;
+                alertStatusDiv.textContent = "ALERT!";
                 alertStatusDiv.className = 'alert-active';
             } else {
-                alertStatusDiv.innerHTML = 'Status: Calm';
+                alertStatusDiv.textContent = 'All Quiet';
                 alertStatusDiv.className = 'alert-calm';
             }
         } catch (error) {

@@ -16,8 +16,8 @@ def driver():
 def test_ui_alert_status_updates_correctly(driver, mocker):
     # Mock the API response
     mocker.patch(
-        "alert_parser.get_alerts_from_api",
-        return_value=json.dumps([{"city": "Tel Aviv", "alerts": ["Red Alert"]}])
+        "alert_parser.fetch_alerts",
+        return_value=json.dumps([{"data": "Red Alert", "title": "Test Alert", "location": "Tel Aviv"}])
     )
 
     # Navigate to the app
@@ -26,16 +26,19 @@ def test_ui_alert_status_updates_correctly(driver, mocker):
     # Interact with the UI
     location_input = driver.find_element(By.ID, "location-input")
     location_input.send_keys("Tel Aviv")
-    set_location_button = driver.find_element(By.ID, "set-location-button")
+    set_location_button = driver.find_element(By.ID, "set-location-btn")
     set_location_button.click()
 
     # Wait for the status to update and assert
-    status_div = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, "status"))
+    WebDriverWait(driver, 10).until(
+        lambda d: "Checking alerts" not in d.find_element(By.ID, "alert-status").text
     )
+    status_div = driver.find_element(By.ID, "alert-status")
     
     # Assert that the "ALERT!" text is present
     assert "ALERT!" in status_div.text
     
     # Assert that the 'alert-active' class is present
-    assert "alert-active" in status_div.get_attribute("class")
+    class_attribute = status_div.get_attribute("class")
+    assert class_attribute is not None
+    assert "alert-active" in class_attribute
