@@ -1,12 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     const locationInput = document.getElementById('location-input');
-    const setLocationBtn = document.getElementById('set-location-btn');
+    const checkAlertsBtn = document.getElementById('check-alerts-btn');
     const alertsContainer = document.getElementById('alerts-container');
     const approvedLocationsDatalist = document.getElementById('approved-locations');
 
     let userLocation = '';
     let fetchInterval;
     let errorCounter = 0;
+    let approvedLocations = [];
 
     const fetchApprovedLocations = async () => {
         try {
@@ -15,7 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-            data.locations.forEach(location => {
+            approvedLocations = data.locations;
+            approvedLocations.forEach(location => {
                 const option = document.createElement('option');
                 option.value = location;
                 approvedLocationsDatalist.appendChild(option);
@@ -92,11 +94,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    setLocationBtn.addEventListener('click', startFetching);
+    checkAlertsBtn.addEventListener('click', startFetching);
 
     locationInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
-            startFetching();
+            if (!checkAlertsBtn.disabled) {
+                startFetching();
+            }
+        }
+    });
+
+    locationInput.addEventListener('input', () => {
+        const enteredLocation = locationInput.value.trim();
+        if (approvedLocations.includes(enteredLocation)) {
+            checkAlertsBtn.disabled = false;
+        } else {
+            checkAlertsBtn.disabled = true;
         }
     });
 

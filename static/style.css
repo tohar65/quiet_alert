@@ -50,7 +50,7 @@ h1 {
     color: #888;
 }
 
-#set-location-btn {
+#check-alerts-btn {
     padding: 1rem 2rem;
     border: none;
     border-radius: 8px;
@@ -62,9 +62,16 @@ h1 {
     transition: background-color 0.3s, transform 0.2s;
 }
 
-#set-location-btn:hover {
+#check-alerts-btn:hover {
     background-color: #0056b3;
     transform: translateY(-2px);
+}
+
+#check-alerts-btn:disabled {
+    background-color: #333;
+    color: #888;
+    cursor: not-allowed;
+    transform: none;
 }
 
 #alert-status {
