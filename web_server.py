@@ -7,8 +7,6 @@ from alert_types import Alert
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 @app.get("/api/alerts")
 def get_alerts(location: Optional[str] = None):
     """
@@ -26,6 +24,4 @@ def get_alerts(location: Optional[str] = None):
 
     return {"alerts": [alert.to_dict() for alert in alerts]}
 
-@app.get("/")
-async def read_index():
-    return FileResponse('static/index.html')
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
