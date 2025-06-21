@@ -12,6 +12,7 @@ app = FastAPI()
 class AlertManager:
     def __init__(self, expiration_seconds: int = 90):
         self.active_alerts: Dict[str, Dict] = {}
+        self.alert_history: List[Alert] = []
         self.expiration_period = timedelta(seconds=expiration_seconds)
 
     async def update_alerts(self):
@@ -35,6 +36,7 @@ class AlertManager:
                 "last_seen": now
             }
         
+        self.alert_history.extend(current_alerts)
         self.expire_alerts()
 
     def expire_alerts(self):
@@ -54,6 +56,11 @@ class AlertManager:
         if location:
             return [alert for alert in alerts if alert.location == location]
         return alerts
+
+    def get_alert_history(self, location: str) -> List[Alert]:
+        """Returns a list of historical alerts for a given location."""
+        history = [alert for alert in self.alert_history if alert.location == location]
+        return sorted(history, key=lambda x: x.alertDate, reverse=True)
 
 alert_manager = AlertManager()
 
@@ -83,5 +90,18 @@ def get_alerts(location: Optional[str] = None):
 
     alerts = alert_manager.get_active_alerts(location)
     return {"alerts": [alert.to_dict() for alert in alerts]}
+
+
+@app.get("/api/alerts/history")
+def get_alert_history(location: str):
+    """
+    Returns historical alerts for a given location.
+    """
+    if location not in APPROVED_LOCATIONS:
+        raise HTTPException(status_code=400, detail="Location not approved")
+    
+    history = alert_manager.get_alert_history(location)
+    return {"history": [alert.to_dict() for alert in history]}
+
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
