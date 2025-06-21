@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pytest
 from unittest.mock import patch, mock_open, MagicMock
 import unittest.mock
@@ -18,7 +21,8 @@ from alert_parser import (
     log_alerts,
     display_alerts,
     fetch_alerts,
-    process_alerts
+    process_alerts,
+    filter_alerts_by_location
 )
 from alert_types import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE
 
@@ -265,3 +269,79 @@ def test_process_alerts_no_data(mock_categorize, mock_fetch):
     
     mock_fetch.assert_called_once()
     mock_categorize.assert_not_called()
+@pytest.fixture
+def sample_alerts_for_filtering():
+    """Fixture for a list of Alert objects for location filtering tests."""
+    return [
+        Alert(
+            alertDate=datetime(2023, 10, 7, 6, 30, 0).isoformat(),
+            title="Test Alert 1",
+            location="Tel Aviv",
+            oref_category=1,
+            status=AlertStatus.ACTIVE,
+            threat_type=ThreatType.ROCKET
+        ),
+        Alert(
+            alertDate=datetime(2023, 10, 7, 6, 35, 0).isoformat(),
+            title="Test Alert 2",
+            location="Ashkelon",
+            oref_category=1,
+            status=AlertStatus.ACTIVE,
+            threat_type=ThreatType.ROCKET
+        ),
+        Alert(
+            alertDate=datetime(2023, 10, 7, 6, 40, 0).isoformat(),
+            title="Test Alert 3",
+            location="Sderot",
+            oref_category=4,
+            status=AlertStatus.ENDED,
+            threat_type=ThreatType.ROCKET
+        ),
+        Alert(
+            alertDate=datetime(2023, 10, 7, 7, 0, 0).isoformat(),
+            title="Test Alert 4",
+            location="tel aviv", # Case-insensitivity test
+            oref_category=1,
+            status=AlertStatus.ACTIVE,
+            threat_type=ThreatType.AIRCRAFT_INTRUSION
+        ),
+    ]
+
+# --- Tests for filter_alerts_by_location ---
+
+def test_filter_by_single_location(sample_alerts_for_filtering):
+    """Test filtering alerts by a single matching location."""
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["Ashkelon"])
+    assert len(filtered) == 1
+    assert filtered[0].location == "Ashkelon"
+
+def test_filter_by_multiple_locations(sample_alerts_for_filtering):
+    """Test filtering alerts by multiple matching locations."""
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["Tel Aviv", "Sderot"])
+    assert len(filtered) == 3 # "Tel Aviv" and "tel aviv" should match
+    locations = {alert.location for alert in filtered}
+    assert "Tel Aviv" in locations
+    assert "tel aviv" in locations
+    assert "Sderot" in locations
+
+def test_filter_by_case_insensitive_location(sample_alerts_for_filtering):
+    """Test that location filtering is case-insensitive."""
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["tel aviv"])
+    assert len(filtered) == 2
+    assert filtered[0].location == "Tel Aviv"
+    assert filtered[1].location == "tel aviv"
+
+def test_filter_by_non_existent_location(sample_alerts_for_filtering):
+    """Test filtering with a location that does not exist."""
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["Haifa"])
+    assert len(filtered) == 0
+
+def test_filter_with_empty_location_list(sample_alerts_for_filtering):
+    """Test filtering with an empty list of locations."""
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, [])
+    assert len(filtered) == 0
+
+def test_filter_empty_alert_list():
+    """Test filtering an empty list of alerts."""
+    filtered = filter_alerts_by_location([], ["Tel Aviv"])
+    assert len(filtered) == 0

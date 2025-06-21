@@ -47,6 +47,30 @@ def categorize_alerts(alerts):
     return [parse_alert(alert) for alert in alerts]
 
 
+def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list[Alert]:
+    """
+    Filters alerts by location.
+
+    Args:
+        alerts: A list of Alert objects.
+        locations: A list of location names to filter by.
+
+    Returns:
+        A new list of alerts that match the given locations.
+    """
+    if not locations:
+        return []
+    
+    location_set = {loc.lower() for loc in locations}
+    
+    filtered_alerts = [
+        alert for alert in alerts
+        if alert.location and alert.location.lower() in location_set
+    ]
+    
+    return filtered_alerts
+
+
 def save_alerts(alerts, filename="alerts.json"):
     """Saves alert data to a JSON file."""
     if alerts:
