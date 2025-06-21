@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let userLocation = '';
     let fetchInterval;
+    let errorCounter = 0;
 
     const fetchApprovedLocations = async () => {
         try {
@@ -31,9 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        alertStatusDiv.innerHTML = `Checking alerts for ${userLocation}...`;
-        alertStatusDiv.className = 'alert-loading';
-
         try {
             const url = `/api/alerts?location=${encodeURIComponent(userLocation)}`;
             const response = await fetch(url);
@@ -42,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
+
+            errorCounter = 0; // Reset counter on success
 
             if (data.alerts && data.alerts.length > 0) {
                 alertStatusDiv.textContent = "ALERT!";
@@ -52,8 +52,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Error fetching alerts:', error);
-            alertStatusDiv.innerHTML = `Error: ${error.message}`;
-            alertStatusDiv.className = 'alert-error';
+            errorCounter++;
+            if (errorCounter >= 3) {
+                alertStatusDiv.innerHTML = `Reconnecting...`;
+                alertStatusDiv.className = 'alert-error';
+            }
         }
     };
 
