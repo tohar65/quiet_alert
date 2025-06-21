@@ -23,7 +23,7 @@ CATEGORY_TO_THREAT_TYPE = {
 }
 
 THREAT_PATTERNS = {
-    ThreatType.ROCKET: re.compile(r"ירי רקטות|טילים"),
+    ThreatType.ROCKET: re.compile(r"ירי רקטות|טילים|התרעת ירי רקטות וטילים"),
     ThreatType.AIRCRAFT_INTRUSION: re.compile(r"כלי טיס עוין")
 }
 

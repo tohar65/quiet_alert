@@ -1,0 +1,6 @@
+- [x] Create extensive unit tests for `alert_parser.py`.
+- [x] Create extensive unit tests for `alert_types.py`.
+- [x] Create system tests for the existing `main.py` functionality.
+- [x] Run all tests and ensure they pass.
+- [x] Fix any bugs found during testing.
+- [ ] Commit the initial tests and fixes.
