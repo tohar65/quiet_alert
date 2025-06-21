@@ -69,6 +69,13 @@ def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list
     ]
     
     return filtered_alerts
+def get_cities_from_alerts(alerts: list[Alert]) -> list[str]:
+    """Extracts a unique list of cities from a list of alerts."""
+    cities = set()
+    for alert in alerts:
+        if alert.location:
+            cities.add(alert.location)
+    return list(cities)
 
 
 def save_alerts(alerts, filename="alerts.json"):
