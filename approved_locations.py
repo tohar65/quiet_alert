@@ -1,1 +1,1 @@
-APPROVED_LOCATIONS = ["פתח תקווה"]
+APPROVED_LOCATIONS = []
