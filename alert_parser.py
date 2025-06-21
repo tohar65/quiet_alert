@@ -117,7 +117,11 @@ def fetch_alerts():
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes
-        return response.json()
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            print("Error: Malformed JSON response from the API.")
+            return None
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
         return None
