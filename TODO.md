@@ -21,3 +21,7 @@
 ## Phase 4: Web Interface Testing
 - [x] Create system/E2E tests for the web interface.
 - [x] Test setting a location and verifying the displayed alert status.
+## Phase 5: Finalization
+- [x] Run all unit, integration, and system tests together.
+- [x] Ensure the entire application works as expected.
+- [x] Final commit of the project.
