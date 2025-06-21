@@ -38,10 +38,7 @@ class Alert:
 
     def to_dict(self):
         return {
-            "alertDate": self.alertDate,
-            "title": self.title,
-            "location": self.location,
-            "oref_category": self.oref_category,
-            "status": self.status.value if self.status else None,
-            "threat_type": self.threat_type.value if self.threat_type else None
+            "id": self.alertDate,
+            "data": self.location,
+            "title": self.threat_type.value if self.threat_type else "Unknown Threat"
         }

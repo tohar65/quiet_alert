@@ -86,27 +86,7 @@ def save_alerts(alerts, filename="alerts.json"):
         print(f"Alerts saved to {filename}")
 
 
-def log_alerts(log_file, alerts):
-    """Logs the alerts to a file, grouped by status and threat type, with all alert fields in clear format."""
-    with open(log_file, 'w', encoding='utf-8') as f:
-        for status in AlertStatus:
-            f.write(f"--- {status.value.capitalize()} Alerts ---\n")
-            filtered = [a for a in alerts if a.status == status]
-            if filtered:
-                for alert in filtered:
-                    f.write(f"Time: {alert.alertDate}\n")
-                    f.write(f"Title: {alert.title}\n")
-                    f.write(f"Location: {alert.location}\n")
-                    f.write(f"Oref Category: {alert.oref_category}\n")
-                    f.write(f"Status: {alert.status.value if alert.status else 'Unknown'}\n")
-                    f.write(f"Threat Type: {alert.threat_type.value if alert.threat_type else 'Unknown'}\n")
-                    f.write("-" * 40 + "\n")
-            else:
-                f.write(f"No {status.value} alerts.\n")
-            f.write("\n")
-
-
-def display_alerts(alerts, log_file=None):
+def display_alerts(alerts):
     """Displays alerts grouped by status and threat type."""
     for status in AlertStatus:
         print(f"--- {status.value.capitalize()} Alerts ---")
@@ -124,9 +104,6 @@ def display_alerts(alerts, log_file=None):
         else:
             print(f"No {status.value} alerts.")
         print(Fore.RESET)
-    if log_file:
-        log_alerts(log_file, alerts)
-        print(f"\nResults logged to {log_file}")
 
 
 def fetch_alerts():
@@ -146,10 +123,10 @@ def fetch_alerts():
         return None
 
 
-def process_alerts(log_file="alerts.log"):
+def process_alerts():
     """Main function to fetch, save, and display alerts."""
     alerts_data = fetch_alerts()
     if alerts_data:
         alerts = categorize_alerts(alerts_data)
         save_alerts(alerts)
-        display_alerts(alerts, log_file)
+        display_alerts(alerts)

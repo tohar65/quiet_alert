@@ -1,36 +1,30 @@
-import argparse
+import json
+import os
+from datetime import datetime
 from colorama import init
-from alert_parser import fetch_alerts, categorize_alerts, filter_alerts_by_location, display_alerts, save_alerts
+from alert_parser import fetch_alerts, categorize_alerts, display_alerts, save_alerts
 
 def main():
     """
     Main function to fetch, process, and display alerts.
-    Supports filtering by location.
+    Supports filtering by location and logging to a file.
     """
-    init() 
-
-    parser = argparse.ArgumentParser(description="Fetch and display alerts from Pikud Haoref.")
-    parser.add_argument(
-        '--locations', 
-        nargs='*', 
-        help='A list of locations to filter alerts by (e.g., "New York" "Los Angeles").'
-    )
-    parser.add_argument(
-        '--log-file', 
-        default='alerts.log', 
-        help='The file to log alerts to.'
-    )
-    args = parser.parse_args()
+    init()
 
     alerts_data = fetch_alerts()
     if alerts_data:
+        # Log each raw alert to a file, ensuring UTF-8 encoding with a BOM
+        file_exists = os.path.exists('alerts.log')
+        with open('alerts.log', 'ab') as f:
+            if not file_exists or os.path.getsize('alerts.log') == 0:
+                f.write(b'\xef\xbb\xbf')  # UTF-8 BOM
+            for alert in alerts_data:
+                f.write(json.dumps(alert, ensure_ascii=False).encode('utf-8') + b'\n')
+
         alerts = categorize_alerts(alerts_data)
-        
-        if args.locations:
-            alerts = filter_alerts_by_location(alerts, args.locations)
-        
+
         save_alerts(alerts)
-        display_alerts(alerts, log_file=args.log_file)
+        display_alerts(alerts)
 
 if __name__ == "__main__":
     main()
