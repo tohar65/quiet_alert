@@ -17,7 +17,7 @@ def test_ui_alert_status_updates_correctly(driver, mocker):
     # Mock the API response
     mocker.patch(
         "alert_parser.fetch_alerts",
-        return_value=json.dumps([{"data": "Red Alert", "title": "Test Alert", "location": "Tel Aviv"}])
+        return_value=json.dumps([{"data": "Red Alert", "title": "Test Alert", "location": "פתח תקווה"}])
     )
 
     # Navigate to the app
@@ -25,7 +25,7 @@ def test_ui_alert_status_updates_correctly(driver, mocker):
 
     # Interact with the UI
     location_input = driver.find_element(By.ID, "location-input")
-    location_input.send_keys("Tel Aviv")
+    location_input.send_keys("פתח תקווה")
     set_location_button = driver.find_element(By.ID, "set-location-btn")
     set_location_button.click()
 

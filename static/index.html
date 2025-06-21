@@ -13,7 +13,8 @@
     <div class="container">
         <h1>Quiet Alert Status</h1>
         <div class="location-setter">
-            <input type="text" id="location-input" placeholder="Enter location (e.g., 'Tel Aviv')">
+            <input type="text" id="location-input" list="approved-locations" placeholder="Enter location (e.g., 'Tel Aviv')">
+            <datalist id="approved-locations"></datalist>
             <button id="set-location-btn">Check Alerts</button>
         </div>
         <div id="alert-status" class="alert-loading">

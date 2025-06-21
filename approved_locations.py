@@ -1,0 +1,1 @@
+APPROVED_LOCATIONS = ["פתח תקווה"]

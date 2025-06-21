@@ -43,11 +43,11 @@ def test_get_alerts_with_location(mocker, raw_alerts_data, categorized_alerts):
     mocker.patch('web_server.fetch_alerts', return_value=raw_alerts_data)
     mocker.patch('web_server.categorize_alerts', return_value=categorized_alerts)
     
-    response = client.get("/api/alerts?location=Area 51")
+    response = client.get("/api/alerts?location=פתח תקווה")
 
     assert response.status_code == 200
     expected_alerts = [
-        alert.to_dict() for alert in categorized_alerts if alert.location == "Area 51"
+        alert.to_dict() for alert in categorized_alerts if alert.location == "פתח תקווה"
     ]
     assert response.json() == {"alerts": expected_alerts}
 
@@ -60,5 +60,21 @@ def test_get_alerts_with_location_no_alerts(mocker, raw_alerts_data, categorized
 
     response = client.get("/api/alerts?location=Area 53")
 
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Location not approved"}
+
+def test_get_approved_locations():
+    """
+    Test that the /api/approved-locations endpoint returns the correct list of locations.
+    """
+    response = client.get("/api/approved-locations")
     assert response.status_code == 200
-    assert response.json() == {"alerts": []}
+    assert response.json() == {"locations": ["פתח תקווה"]}
+
+def test_get_alerts_invalid_location():
+    """
+    Test that requesting an invalid location returns a 400 error.
+    """
+    response = client.get("/api/alerts?location=Invalid Location")
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Location not approved"}
