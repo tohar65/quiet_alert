@@ -1,3 +1,4 @@
+import re
 import requests
 import json
 from datetime import datetime
@@ -26,8 +27,59 @@ def save_alerts(data, filename="alerts.json"):
             json.dump(data, f, ensure_ascii=False, indent=4)
         print(f"Alerts saved to {filename}")
 
-def display_alerts(active_alerts, upcoming_alerts):
-    """Displays active and upcoming alerts."""
+def log_alerts(log_file, active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts):
+    """Logs the alerts to a file."""
+    with open(log_file, 'w', encoding='utf-8') as f:
+        f.write("--- Rocket Alerts ---\n")
+        if active_alerts:
+            for alert in active_alerts:
+                alert_time = alert.get("alertDate", "N/A")
+                city = alert.get("data", "N/A")
+                f.write(f"Time: {alert_time}, Location: {city}, Type: Active\n")
+        else:
+            f.write("No active rocket alerts.\n")
+
+        f.write("\n--- Upcoming Alerts ---\n")
+        if upcoming_alerts:
+            for alert in upcoming_alerts:
+                alert_time = alert.get("alertDate", "N/A")
+                city = alert.get("data", "N/A")
+                f.write(f"Time: {alert_time}, Location: {city}, Type: Upcoming\n")
+        else:
+            f.write("No upcoming alerts.\n")
+
+        f.write("\n--- Aircraft Intrusion Alerts ---\n")
+        if aircraft_intrusion_alerts:
+            for alert in aircraft_intrusion_alerts:
+                alert_time = alert.get("alertDate", "N/A")
+                city = alert.get("data", "N/A")
+                title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
+                f.write(f"Time: {alert_time}, Location: {city}, Type: {title}\n")
+        else:
+            f.write("No aircraft intrusion alerts.\n")
+
+        f.write("\n--- Ended Alerts ---\n")
+        if ended_alerts:
+            for alert in ended_alerts:
+                alert_time = alert.get("alertDate", "N/A")
+                city = alert.get("data", "N/A")
+                title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
+                f.write(f"Time: {alert_time}, Location: {city}\n")
+                f.write(f"  Type: {title}\n")
+        else:
+            f.write("No ended alerts.\n")
+
+        if unexpected_alerts:
+            f.write("\n--- Unexpected Alerts ---\n")
+            for alert in unexpected_alerts:
+                alert_time = alert.get("alertDate", "N/A")
+                city = alert.get("data", "N/A")
+                title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
+                f.write(f"Warning: Unexpected alert type: '{title}'\n")
+                f.write(f"  Time: {alert_time}, Location: {city}\n")
+
+def display_alerts(active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts, log_file=None):
+    """Displays active, upcoming, aircraft intrusion, ended, and unexpected alerts."""
     print("--- Rocket Alerts ---")
     if active_alerts:
         for alert in active_alerts:
@@ -45,25 +97,72 @@ def display_alerts(active_alerts, upcoming_alerts):
             print(Fore.YELLOW + f"Time: {alert_time}, Location: {city}, Type: Upcoming")
     else:
         print("No upcoming alerts.")
+
+    print(Fore.RESET + "\n--- Aircraft Intrusion Alerts ---")
+    if aircraft_intrusion_alerts:
+        for alert in aircraft_intrusion_alerts:
+            alert_time = alert.get("alertDate", "N/A")
+            city = alert.get("data", "N/A")
+            title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
+            print(Fore.BLUE + f"Time: {alert_time}, Location: {city}, Type: {title}")
+    else:
+        print("No aircraft intrusion alerts.")
+
+    print(Fore.RESET + "\n--- Ended Alerts ---")
+    if ended_alerts:
+        for alert in ended_alerts:
+            alert_time = alert.get("alertDate", "N/A")
+            city = alert.get("data", "N/A")
+            title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
+            print(Fore.LIGHTBLACK_EX + f"Time: {alert_time}, Location: {city}")
+            print(Fore.LIGHTBLACK_EX + f"  Type: {title}")
+    else:
+        print("No ended alerts.")
+
+    if unexpected_alerts:
+        print(Fore.RESET + "\n--- Unexpected Alerts ---")
+        for alert in unexpected_alerts:
+            alert_time = alert.get("alertDate", "N/A")
+            city = alert.get("data", "N/A")
+            title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
+            print(Fore.MAGENTA + f"Warning: Unexpected alert type: '{title}'")
+            print(Fore.MAGENTA + f"  Time: {alert_time}, Location: {city}")
+
     print(Fore.RESET)
 
+    if log_file:
+        log_alerts(log_file, active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts)
+        print(f"\nResults logged to {log_file}")
+
+
 def categorize_alerts(alerts):
-    """Categorizes alerts into active and upcoming."""
+    """Categorizes alerts into active, upcoming, aircraft intrusion, ended, and unexpected."""
     active_alerts = []
     upcoming_alerts = []
-    
-    for alert in alerts:
-        if alert.get("title") == "ירי רקטות וטילים":
-            active_alerts.append(alert)
-        else:
-            upcoming_alerts.append(alert)
-            
-    return active_alerts, upcoming_alerts
+    aircraft_intrusion_alerts = []
+    ended_alerts = []
+    unexpected_alerts = []
 
-def process_alerts():
+    for alert in alerts:
+        title = alert.get("title", "")
+        if re.search(r'-\s+האירוע הסתיים', title):
+            ended_alerts.append(alert)
+        elif title == "ירי רקטות וטילים":
+            active_alerts.append(alert)
+        elif title == "בדקות הקרובות צפויות להתקבל התרעות באזורך":
+            upcoming_alerts.append(alert)
+        elif "חדירת כלי טיס עוין" in title:
+            aircraft_intrusion_alerts.append(alert)
+        else:
+            unexpected_alerts.append(alert)
+
+    return active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts
+
+
+def process_alerts(log_file="alerts.log"):
     """Main function to fetch, save, and display alerts."""
     alerts_data = fetch_alerts()
     if alerts_data:
         save_alerts(alerts_data)
-        active_alerts, upcoming_alerts = categorize_alerts(alerts_data)
-        display_alerts(active_alerts, upcoming_alerts)
+        active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts = categorize_alerts(alerts_data)
+        display_alerts(active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts, log_file)
