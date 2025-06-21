@@ -3,6 +3,93 @@ import requests
 import json
 from datetime import datetime
 from colorama import Fore
+from alert_types import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
+
+
+def get_key_by_value(d, value):
+    return next((k for k, v in d.items() if v == value), None)
+
+
+def parse_alert(alert):
+    """Converts a single Pikud Haoref alert dict to an Alert object with resolved status and threat type."""
+    oref_category = alert.get("category")
+    title = alert.get("title", "")
+    status = CATEGORY_TO_STATUS.get(oref_category)
+    threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
+
+    if get_key_by_value(CATEGORY_TO_STATUS, AlertStatus.ENDED) == oref_category:
+        for ttype, pattern in THREAT_PATTERNS.items():
+            if pattern.search(title):
+                threat_type = ttype
+                break
+        else:
+            raise ValueError(f"Unexpected ended alert type: {title}")
+
+    return Alert(
+        alertDate=alert.get("alertDate"),
+        title=title,
+        location=alert.get("data"),
+        oref_category=oref_category,
+        status=status,
+        threat_type=threat_type
+    )
+
+
+def categorize_alerts(alerts):
+    """Converts all alerts to Alert objects with status and threat_type fields."""
+    return [parse_alert(alert) for alert in alerts]
+
+
+def save_alerts(alerts, filename="alerts.json"):
+    """Saves alert data to a JSON file."""
+    if alerts:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump([alert.to_dict() for alert in alerts], f, ensure_ascii=False, indent=4)
+        print(f"Alerts saved to {filename}")
+
+
+def log_alerts(log_file, alerts):
+    """Logs the alerts to a file, grouped by status and threat type, with all alert fields in clear format."""
+    with open(log_file, 'w', encoding='utf-8') as f:
+        for status in AlertStatus:
+            f.write(f"--- {status.value.capitalize()} Alerts ---\n")
+            filtered = [a for a in alerts if a.status == status]
+            if filtered:
+                for alert in filtered:
+                    f.write(f"Time: {alert.alertDate}\n")
+                    f.write(f"Title: {alert.title}\n")
+                    f.write(f"Location: {alert.location}\n")
+                    f.write(f"Oref Category: {alert.oref_category}\n")
+                    f.write(f"Status: {alert.status.value if alert.status else 'Unknown'}\n")
+                    f.write(f"Threat Type: {alert.threat_type.value if alert.threat_type else 'Unknown'}\n")
+                    f.write("-" * 40 + "\n")
+            else:
+                f.write(f"No {status.value} alerts.\n")
+            f.write("\n")
+
+
+def display_alerts(alerts, log_file=None):
+    """Displays alerts grouped by status and threat type."""
+    for status in AlertStatus:
+        print(f"--- {status.value.capitalize()} Alerts ---")
+        filtered = [a for a in alerts if a.status == status]
+        if filtered:
+            for alert in filtered:
+                color = Fore.RESET
+                if status == AlertStatus.ACTIVE:
+                    color = Fore.RED
+                elif status == AlertStatus.UPCOMING:
+                    color = Fore.YELLOW
+                elif status == AlertStatus.ENDED:
+                    color = Fore.LIGHTBLACK_EX
+                print(color + f"Time: {alert.alertDate}, Location: {alert.location}, Type: {alert.threat_type.value if alert.threat_type else 'Unknown'}")
+        else:
+            print(f"No {status.value} alerts.")
+        print(Fore.RESET)
+    if log_file:
+        log_alerts(log_file, alerts)
+        print(f"\nResults logged to {log_file}")
+
 
 def fetch_alerts():
     """Fetches alert data from the oref.org.il API."""
@@ -20,149 +107,11 @@ def fetch_alerts():
         print(f"Error fetching data: {e}")
         return None
 
-def save_alerts(data, filename="alerts.json"):
-    """Saves alert data to a JSON file."""
-    if data:
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        print(f"Alerts saved to {filename}")
-
-def log_alerts(log_file, active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts):
-    """Logs the alerts to a file."""
-    with open(log_file, 'w', encoding='utf-8') as f:
-        f.write("--- Rocket Alerts ---\n")
-        if active_alerts:
-            for alert in active_alerts:
-                alert_time = alert.get("alertDate", "N/A")
-                city = alert.get("data", "N/A")
-                f.write(f"Time: {alert_time}, Location: {city}, Type: Active\n")
-        else:
-            f.write("No active rocket alerts.\n")
-
-        f.write("\n--- Upcoming Alerts ---\n")
-        if upcoming_alerts:
-            for alert in upcoming_alerts:
-                alert_time = alert.get("alertDate", "N/A")
-                city = alert.get("data", "N/A")
-                f.write(f"Time: {alert_time}, Location: {city}, Type: Upcoming\n")
-        else:
-            f.write("No upcoming alerts.\n")
-
-        f.write("\n--- Aircraft Intrusion Alerts ---\n")
-        if aircraft_intrusion_alerts:
-            for alert in aircraft_intrusion_alerts:
-                alert_time = alert.get("alertDate", "N/A")
-                city = alert.get("data", "N/A")
-                title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
-                f.write(f"Time: {alert_time}, Location: {city}, Type: {title}\n")
-        else:
-            f.write("No aircraft intrusion alerts.\n")
-
-        f.write("\n--- Ended Alerts ---\n")
-        if ended_alerts:
-            for alert in ended_alerts:
-                alert_time = alert.get("alertDate", "N/A")
-                city = alert.get("data", "N/A")
-                title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
-                f.write(f"Time: {alert_time}, Location: {city}\n")
-                f.write(f"  Type: {title}\n")
-        else:
-            f.write("No ended alerts.\n")
-
-        if unexpected_alerts:
-            f.write("\n--- Unexpected Alerts ---\n")
-            for alert in unexpected_alerts:
-                alert_time = alert.get("alertDate", "N/A")
-                city = alert.get("data", "N/A")
-                title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
-                f.write(f"Warning: Unexpected alert type: '{title}'\n")
-                f.write(f"  Time: {alert_time}, Location: {city}\n")
-
-def display_alerts(active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts, log_file=None):
-    """Displays active, upcoming, aircraft intrusion, ended, and unexpected alerts."""
-    print("--- Rocket Alerts ---")
-    if active_alerts:
-        for alert in active_alerts:
-            alert_time = alert.get("alertDate", "N/A")
-            city = alert.get("data", "N/A")
-            print(Fore.RED + f"Time: {alert_time}, Location: {city}, Type: Active")
-    else:
-        print("No active rocket alerts.")
-
-    print(Fore.RESET + "\n--- Upcoming Alerts ---")
-    if upcoming_alerts:
-        for alert in upcoming_alerts:
-            alert_time = alert.get("alertDate", "N/A")
-            city = alert.get("data", "N/A")
-            print(Fore.YELLOW + f"Time: {alert_time}, Location: {city}, Type: Upcoming")
-    else:
-        print("No upcoming alerts.")
-
-    print(Fore.RESET + "\n--- Aircraft Intrusion Alerts ---")
-    if aircraft_intrusion_alerts:
-        for alert in aircraft_intrusion_alerts:
-            alert_time = alert.get("alertDate", "N/A")
-            city = alert.get("data", "N/A")
-            title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
-            print(Fore.BLUE + f"Time: {alert_time}, Location: {city}, Type: {title}")
-    else:
-        print("No aircraft intrusion alerts.")
-
-    print(Fore.RESET + "\n--- Ended Alerts ---")
-    if ended_alerts:
-        for alert in ended_alerts:
-            alert_time = alert.get("alertDate", "N/A")
-            city = alert.get("data", "N/A")
-            title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
-            print(Fore.LIGHTBLACK_EX + f"Time: {alert_time}, Location: {city}")
-            print(Fore.LIGHTBLACK_EX + f"  Type: {title}")
-    else:
-        print("No ended alerts.")
-
-    if unexpected_alerts:
-        print(Fore.RESET + "\n--- Unexpected Alerts ---")
-        for alert in unexpected_alerts:
-            alert_time = alert.get("alertDate", "N/A")
-            city = alert.get("data", "N/A")
-            title = re.sub(r'\s+', ' ', alert.get("title", "N/A")).strip()
-            print(Fore.MAGENTA + f"Warning: Unexpected alert type: '{title}'")
-            print(Fore.MAGENTA + f"  Time: {alert_time}, Location: {city}")
-
-    print(Fore.RESET)
-
-    if log_file:
-        log_alerts(log_file, active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts)
-        print(f"\nResults logged to {log_file}")
-
-
-def categorize_alerts(alerts):
-    """Categorizes alerts into active, upcoming, aircraft intrusion, ended, and unexpected."""
-    active_alerts = []
-    upcoming_alerts = []
-    aircraft_intrusion_alerts = []
-    ended_alerts = []
-    unexpected_alerts = []
-
-    for alert in alerts:
-        title = alert.get("title", "")
-        if re.search(r'-\s+האירוע הסתיים', title):
-            ended_alerts.append(alert)
-        elif title == "ירי רקטות וטילים":
-            active_alerts.append(alert)
-        elif title == "בדקות הקרובות צפויות להתקבל התרעות באזורך":
-            upcoming_alerts.append(alert)
-        elif "חדירת כלי טיס עוין" in title:
-            aircraft_intrusion_alerts.append(alert)
-        else:
-            unexpected_alerts.append(alert)
-
-    return active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts
-
 
 def process_alerts(log_file="alerts.log"):
     """Main function to fetch, save, and display alerts."""
     alerts_data = fetch_alerts()
     if alerts_data:
-        save_alerts(alerts_data)
-        active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts = categorize_alerts(alerts_data)
-        display_alerts(active_alerts, upcoming_alerts, aircraft_intrusion_alerts, ended_alerts, unexpected_alerts, log_file)
+        alerts = categorize_alerts(alerts_data)
+        save_alerts(alerts)
+        display_alerts(alerts, log_file)
