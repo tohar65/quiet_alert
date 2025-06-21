@@ -1,28 +1,38 @@
-import re
+import json
 
 def update_approved_locations():
     """
     Parses 'alerts.log' to extract unique location names and updates
     'approved_locations.py' with the sorted list of these locations.
     """
+    unique_locations = set()
     try:
-        with open('alerts.log', 'r', encoding='utf-8') as log_file:
-            log_content = log_file.read()
+        # Use 'utf-8-sig' to handle the BOM character at the start of the file
+        with open('alerts.log', 'r', encoding='utf-8-sig') as log_file:
+            for line in log_file:
+                try:
+                    alert = json.loads(line)
+                    location = alert.get('data')
+                    if location:
+                        unique_locations.add(location)
+                except json.JSONDecodeError:
+                    print(f"Warning: Could not parse line as JSON: {line.strip()}")
+                    continue
     except FileNotFoundError:
         print("Error: alerts.log not found.")
         return
 
-    # Regex to find the value of the 'data' field
-    locations = re.findall(r"'data': '(.*?)'", log_content)
+    sorted_locations = sorted(list(unique_locations))
 
-    # Get unique locations and sort them
-    unique_locations = sorted(list(set(locations)))
-
-    # Write the updated list to approved_locations.py
     with open('approved_locations.py', 'w', encoding='utf-8') as approved_file:
-        approved_file.write(f"APPROVED_LOCATIONS = {unique_locations}\n")
+        approved_file.write("APPROVED_LOCATIONS = [\n")
+        for location in sorted_locations:
+            # Escape double quotes inside the location string, just in case
+            location_str = location.replace('"', '\\"')
+            approved_file.write(f'    "{location_str}",\n')
+        approved_file.write("]\n")
 
-    print("approved_locations.py has been updated successfully.")
+    print(f"approved_locations.py has been updated successfully with {len(sorted_locations)} locations.")
 
 if __name__ == "__main__":
     update_approved_locations()
