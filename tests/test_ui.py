@@ -27,10 +27,19 @@ def test_alert_history_and_ui(page: Page, live_server, mocker):
         status=AlertStatus.ENDED,
         threat_type=ThreatType.AIRCRAFT_INTRUSION,
     )
-    all_alerts = [active_alert, inactive_alert]
+    # Add an upcoming alert for yellow test
+    upcoming_alert = Alert(
+        alertDate=datetime.now(),
+        title="תרגול התרעה",
+        location="פתח תקווה",
+        oref_category=14,
+        status=AlertStatus.UPCOMING,
+        threat_type=None,
+    )
+    all_alerts = [upcoming_alert, active_alert, inactive_alert]
 
     # Patch the alert manager methods and approved locations
-    mocker.patch.object(alert_manager, 'get_active_alerts', return_value=[active_alert])
+    mocker.patch.object(alert_manager, 'get_active_alerts', return_value=[upcoming_alert])
     mocker.patch.object(alert_manager, 'get_alert_history', return_value=all_alerts)
     mocker.patch('web_server.APPROVED_LOCATIONS', APPROVED_LOCATIONS + ["פתח תקווה"])
 
@@ -46,11 +55,12 @@ def test_alert_history_and_ui(page: Page, live_server, mocker):
     main_alert = page.locator("#alerts-container .alert-item").first
     expect(main_alert).to_be_visible()
     expect(main_alert.locator(".alert-location")).to_have_text("פתח תקווה")
-    expect(main_alert.locator(".alert-threat")).to_have_text("ירי רקטות וטילים")
-
-    # Check for the new, larger font size
-    font_size = main_alert.evaluate("element => window.getComputedStyle(element).fontSize")
-    assert font_size == "40px"
+    expect(main_alert.locator(".alert-threat")).to_have_text("תרגול התרעה")
+    # Check yellow color for upcoming
+    color = main_alert.evaluate("el => window.getComputedStyle(el).color")
+    border = main_alert.evaluate("el => window.getComputedStyle(el).border")
+    assert "rgb(255, 215, 0)" in color or "#ffd700" in color.lower()
+    assert "rgb(255, 215, 0)" in border or "#ffd700" in border.lower()
 
     # Wait for the history to load and verify its structure
     history_container = page.locator("#history-container")
@@ -69,3 +79,9 @@ def test_alert_history_and_ui(page: Page, live_server, mocker):
     expect(inactive_item).to_be_visible()
     expect(inactive_item.locator(".history-threat")).to_have_text("חדירת כלי טיס עוין")
     expect(inactive_item.locator(".history-location")).to_have_text("פתח תקווה")
+    # Check history yellow
+    upcoming_item = history_container.locator(".history-item.upcoming").first
+    expect(upcoming_item).to_be_visible()
+    expect(upcoming_item.locator(".history-threat")).to_have_text("תרגול התרעה")
+    border_color = upcoming_item.evaluate("element => window.getComputedStyle(element).borderLeftColor")
+    assert border_color == "rgb(255, 215, 0)"  # #ffd700

@@ -63,9 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (alert.status === 'active') {
                 alertElement.classList.add('active');
             } else if (alert.status === 'upcoming') {
-                alertElement.style.color = '#ffd700';
-                alertElement.style.backgroundColor = 'rgba(255,215,0,0.1)';
-                alertElement.style.border = '2px solid #ffd700';
+                alertElement.classList.add('alert-upcoming');
             } else if (alert.status === 'ended') {
                 alertElement.classList.add('alert-calm');
             }
@@ -109,6 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyElement.className = 'history-item';
                 if (alert.status === 'active') {
                     historyElement.classList.add('active');
+                } else if (alert.status === 'upcoming') {
+                    historyElement.classList.add('upcoming');
                 }
                 const detailsElement = document.createElement('div');
                 detailsElement.className = 'history-details';
