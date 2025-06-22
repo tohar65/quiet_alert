@@ -1,6 +1,7 @@
 import re
 import requests
 import json
+import gzip
 from datetime import datetime
 from colorama import Fore
 from alert_types import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
@@ -12,6 +13,19 @@ def parse_alert(alert):
     title = alert.get("title", "")
     status = CATEGORY_TO_STATUS.get(oref_category)
     threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
+
+    raw_date = alert.get("alertDate")
+    alert_date_obj = None
+    if isinstance(raw_date, str):
+        try:
+            # The API provides dates in "YYYY-MM-DD HH:MM:SS" format.
+            alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            # In case of format errors or if raw_date is None, leave it as None.
+            alert_date_obj = None
+    elif isinstance(raw_date, datetime):
+        # If it's already a datetime object, use it directly.
+        alert_date_obj = raw_date
 
     # The category for ended alerts can be inconsistent. A reliable way to identify
     # them is by checking for "ended" ("הסתיים" or "הסתיימה") in the title.
@@ -33,7 +47,7 @@ def parse_alert(alert):
             raise ValueError(f"Unexpected ended alert type: {title}")
 
     return Alert(
-        alertDate=alert.get("alertDate"),
+        alertDate=alert_date_obj,
         title=title,
         location=alert.get("data"),
         oref_category=oref_category,
@@ -45,6 +59,26 @@ def parse_alert(alert):
 def categorize_alerts(alerts):
     """Converts all alerts to Alert objects with status and threat_type fields."""
     return [parse_alert(alert) for alert in alerts]
+
+
+def deduplicate_alerts(alerts: list[Alert]) -> list[Alert]:
+    """Removes duplicate alerts based on location, threat_type, and rounded alertDate."""
+    seen = set()
+    unique_alerts = []
+    for alert in alerts:
+        # Use a tuple of (location, threat_type, rounded_time) as a unique key
+        key = (
+            alert.location,
+            alert.threat_type,
+            str(alert.status),
+            str(alert.title),
+            str(alert.oref_category),
+            str(alert.alertDate)[:16]  # e.g., up to minute
+        )
+        if key not in seen:
+            seen.add(key)
+            unique_alerts.append(alert)
+    return unique_alerts
 
 
 def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list[Alert]:
@@ -117,10 +151,33 @@ def fetch_alerts():
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes
+        
+        raw_content = response.content
+        
         try:
-            return response.json()
+            if response.headers.get('Content-Encoding') == 'gzip':
+                try:
+                    # Attempt to decompress, as indicated by the header.
+                    decompressed_content = gzip.decompress(raw_content)
+                    json_data = json.loads(decompressed_content.decode('utf-8'))
+                except gzip.BadGzipFile:
+                    # The server is sending a 'gzip' header but the content is not
+                    # actually compressed. Log a warning and parse as plain text.
+                    print("Warning: Server sent 'Content-Encoding: gzip' header for uncompressed content.")
+                    json_data = response.json()
+            else:
+                # No compression header, parse as plain JSON.
+                json_data = response.json()
+            
+            return json_data
         except json.JSONDecodeError:
             print("Error: Malformed JSON response from the API.")
+            print(f"Response Headers: {response.headers}")
+            print(f"Content-Length Header: {response.headers.get('Content-Length')}")
+            print(f"Actual Content Length (raw bytes): {len(raw_content)}")
+            print(f"Actual Content Length (decoded text): {len(response.text)}")
+            print("Response Text (first 500 chars):")
+            print(response.text[:500])
             return None
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
@@ -132,5 +189,6 @@ def process_alerts():
     alerts_data = fetch_alerts()
     if alerts_data:
         alerts = categorize_alerts(alerts_data)
+        alerts = deduplicate_alerts(alerts)
         save_alerts(alerts)
         display_alerts(alerts)

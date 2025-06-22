@@ -45,7 +45,7 @@ class TestAlertTypes(unittest.TestCase):
             threat_type=ThreatType.ROCKET
         )
         expected_dict = {
-            "alertDate": now,
+            "alertDate": now.isoformat(),
             "title": "Test Alert",
             "location": "Test Location",
             "oref_category": 1,
@@ -66,7 +66,7 @@ class TestAlertTypes(unittest.TestCase):
             threat_type=None
         )
         expected_dict = {
-            "alertDate": now,
+            "alertDate": now.isoformat(),
             "title": "Test Alert",
             "location": "Test Location",
             "oref_category": 1,

@@ -1,4 +1,6 @@
 import asyncio
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from typing import Optional, Dict, List
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +9,27 @@ from alert_parser import fetch_alerts, categorize_alerts
 from alert_types import Alert
 from approved_locations import APPROVED_LOCATIONS
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handles startup and shutdown events for the application.
+    """
+    task = None
+    # Start the background task only if not in testing mode
+    if os.environ.get("TESTING") != "True":
+        task = asyncio.create_task(refresh_alerts())
+    
+    yield
+    
+    # On shutdown, cancel the background task if it exists
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            print("Background task cancelled.")
+
+app = FastAPI(lifespan=lifespan)
 
 class AlertManager:
     def __init__(self, expiration_seconds: int = 90):
@@ -24,11 +46,13 @@ class AlertManager:
             self.expire_alerts()
             return
 
+        # The fetched alerts are the latest 24-hour window; treat as authoritative
         current_alerts = categorize_alerts(raw_alerts)
         now = datetime.now()
 
+        # Update active_alerts
+        self.active_alerts.clear()
         for alert in current_alerts:
-            # Use a unique identifier for each alert, e.g., location + threat type
             threat_value = alert.threat_type.value if alert.threat_type else "unknown"
             alert_key = f"{alert.location}:{threat_value}"
             self.active_alerts[alert_key] = {
@@ -36,8 +60,10 @@ class AlertManager:
                 "last_seen": now
             }
         
-        self.alert_history.extend(current_alerts)
+        # Replace alert_history with the latest fetched alerts
+        self.alert_history = list(current_alerts)
         self.expire_alerts()
+        print(f"alert history length: {len(self.alert_history)}")
 
     def expire_alerts(self):
         """Removes alerts that have not been seen for the expiration period."""
@@ -59,6 +85,7 @@ class AlertManager:
 
     def get_alert_history(self, location: str) -> List[Alert]:
         """Returns a list of historical alerts for a given location."""
+        print("Getting alert history for location:", location)
         history = [alert for alert in self.alert_history if alert.location == location]
         return sorted(history, key=lambda x: x.alertDate, reverse=True)
 
@@ -70,10 +97,6 @@ async def refresh_alerts():
         await alert_manager.update_alerts()
         await asyncio.sleep(2)
 
-@app.on_event("startup")
-async def startup_event():
-    """Starts the background task to refresh alerts."""
-    asyncio.create_task(refresh_alerts())
 
 @app.get("/api/approved-locations")
 def get_approved_locations():
@@ -101,7 +124,25 @@ def get_alert_history(location: str):
         raise HTTPException(status_code=400, detail="Location not approved")
     
     history = alert_manager.get_alert_history(location)
+    print(f"Returning {len(history)} historical alerts for {location}: {history}")
     return {"history": [alert.to_dict() for alert in history]}
+
+
+@app.get("/api/alerts/all")
+def get_all_alerts(location: Optional[str] = None):
+    """
+    Returns all alerts (active, upcoming, finished) for a location, sorted newest to oldest.
+    If a location is provided, returns alerts for that specific location.
+    """
+    if location and location not in APPROVED_LOCATIONS:
+        raise HTTPException(status_code=400, detail="Location not approved")
+
+    # Use alert_history for all alerts, sorted by date (newest first)
+    alerts = alert_manager.alert_history
+    if location:
+        alerts = [alert for alert in alerts if alert.location == location]
+    alerts_sorted = sorted(alerts, key=lambda x: x.alertDate, reverse=True)
+    return {"alerts": [alert.to_dict() for alert in alerts_sorted]}
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

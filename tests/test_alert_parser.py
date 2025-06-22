@@ -18,7 +18,6 @@ from alert_parser import (
     parse_alert,
     categorize_alerts,
     save_alerts,
-    log_alerts,
     display_alerts,
     fetch_alerts,
     process_alerts,
@@ -175,47 +174,13 @@ def test_save_empty_alerts_list():
         save_alerts([])
         mock_file.assert_not_called()
 
-@patch("builtins.open", new_callable=mock_open)
-def test_log_alerts(mock_file, mock_parsed_alerts):
-    """Test logging alerts to a file."""
-    log_file = "test.log"
-    log_alerts(log_file, mock_parsed_alerts)
-
-    mock_file.assert_called_once_with(log_file, 'w', encoding='utf-8')
-    handle = mock_file()
-    
-    # Check if all statuses are present
-    written_content = "".join(c[0][0] for c in handle.write.call_args_list)
-    assert "--- Active Alerts ---" in written_content
-    assert "--- Upcoming Alerts ---" in written_content
-    assert "--- Ended Alerts ---" in written_content
-    
-    # Check for specific alert content
-    assert "Location: תל אביב - מרכז העיר" in written_content
-    assert "Threat Type: rocket" in written_content
-
-@patch('alert_parser.log_alerts')
 @patch('builtins.print')
-def test_display_alerts(mock_print, mock_log_alerts, mock_parsed_alerts):
+def test_display_alerts(mock_print, mock_parsed_alerts):
     """Test displaying alerts to the console."""
     display_alerts(mock_parsed_alerts)
     
     # Verify print was called for headers and alerts
     assert mock_print.call_count > len(mock_parsed_alerts) + len(AlertStatus)
-    
-    # Check if log_alerts is not called when no log_file is provided
-    mock_log_alerts.assert_not_called()
-
-@patch('alert_parser.log_alerts')
-@patch('builtins.print')
-def test_display_alerts_with_logging(mock_print, mock_log_alerts, mock_parsed_alerts):
-    """Test displaying alerts and logging to a file."""
-    log_file = "test.log"
-    display_alerts(mock_parsed_alerts, log_file)
-    
-    mock_log_alerts.assert_called_once_with(log_file, mock_parsed_alerts)
-    # Check if the logging confirmation message is printed
-    mock_print.assert_any_call(f"\nResults logged to {log_file}")
 
 @patch('requests.get')
 def test_fetch_alerts_success(mock_get, mock_alerts_list_raw):
@@ -254,12 +219,12 @@ def test_process_alerts_workflow(
     mock_fetch.return_value = mock_alerts_list_raw
     mock_categorize.return_value = mock_parsed_alerts
     
-    process_alerts("test.log")
+    process_alerts()
     
     mock_fetch.assert_called_once()
     mock_categorize.assert_called_once_with(mock_alerts_list_raw)
     mock_save.assert_called_once_with(mock_parsed_alerts)
-    mock_display.assert_called_once_with(mock_parsed_alerts, "test.log")
+    mock_display.assert_called_once_with(mock_parsed_alerts)
 
 @patch('alert_parser.fetch_alerts', return_value=None)
 @patch('alert_parser.categorize_alerts')
@@ -274,15 +239,15 @@ def sample_alerts_for_filtering():
     """Fixture for a list of Alert objects for location filtering tests."""
     return [
         Alert(
-            alertDate=datetime(2023, 10, 7, 6, 30, 0).isoformat(),
+            alertDate=datetime(2023, 10, 7, 6, 30, 0),
             title="Test Alert 1",
-            location="Tel Aviv",
+            location="פתח תקווה",
             oref_category=1,
             status=AlertStatus.ACTIVE,
             threat_type=ThreatType.ROCKET
         ),
         Alert(
-            alertDate=datetime(2023, 10, 7, 6, 35, 0).isoformat(),
+            alertDate=datetime(2023, 10, 7, 6, 35, 0),
             title="Test Alert 2",
             location="Ashkelon",
             oref_category=1,
@@ -290,7 +255,7 @@ def sample_alerts_for_filtering():
             threat_type=ThreatType.ROCKET
         ),
         Alert(
-            alertDate=datetime(2023, 10, 7, 6, 40, 0).isoformat(),
+            alertDate=datetime(2023, 10, 7, 6, 40, 0),
             title="Test Alert 3",
             location="Sderot",
             oref_category=4,
@@ -298,9 +263,9 @@ def sample_alerts_for_filtering():
             threat_type=ThreatType.ROCKET
         ),
         Alert(
-            alertDate=datetime(2023, 10, 7, 7, 0, 0).isoformat(),
+            alertDate=datetime(2023, 10, 7, 7, 0, 0),
             title="Test Alert 4",
-            location="tel aviv", # Case-insensitivity test
+            location="Beer Sheva", # Case-insensitivity test
             oref_category=1,
             status=AlertStatus.ACTIVE,
             threat_type=ThreatType.AIRCRAFT_INTRUSION
@@ -317,19 +282,17 @@ def test_filter_by_single_location(sample_alerts_for_filtering):
 
 def test_filter_by_multiple_locations(sample_alerts_for_filtering):
     """Test filtering alerts by multiple matching locations."""
-    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["Tel Aviv", "Sderot"])
-    assert len(filtered) == 3 # "Tel Aviv" and "tel aviv" should match
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["פתח תקווה", "Sderot"])
+    assert len(filtered) == 2
     locations = {alert.location for alert in filtered}
-    assert "Tel Aviv" in locations
-    assert "tel aviv" in locations
+    assert "פתח תקווה" in locations
     assert "Sderot" in locations
 
 def test_filter_by_case_insensitive_location(sample_alerts_for_filtering):
     """Test that location filtering is case-insensitive."""
-    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["tel aviv"])
-    assert len(filtered) == 2
-    assert filtered[0].location == "Tel Aviv"
-    assert filtered[1].location == "tel aviv"
+    filtered = filter_alerts_by_location(sample_alerts_for_filtering, ["beer sheva"])
+    assert len(filtered) == 1
+    assert filtered[0].location == "Beer Sheva"
 
 def test_filter_by_non_existent_location(sample_alerts_for_filtering):
     """Test filtering with a location that does not exist."""
@@ -343,5 +306,5 @@ def test_filter_with_empty_location_list(sample_alerts_for_filtering):
 
 def test_filter_empty_alert_list():
     """Test filtering an empty list of alerts."""
-    filtered = filter_alerts_by_location([], ["Tel Aviv"])
+    filtered = filter_alerts_by_location([], ["פתח תקווה"])
     assert len(filtered) == 0

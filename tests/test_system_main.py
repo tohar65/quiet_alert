@@ -51,10 +51,13 @@ def mock_alerts(mocker):
     mocker.patch('main.fetch_alerts', return_value=fake_alerts_data)
     return fake_alerts_data
 
-def test_system_without_location_filter(mock_alerts):
+def test_system_without_location_filter(mock_alerts, monkeypatch):
     """
     Tests the main script without location filtering, verifying all alerts are logged.
     """
+    # Arrange
+    monkeypatch.setattr(sys, 'argv', ['main.py'])
+
     # Act
     main()
 
