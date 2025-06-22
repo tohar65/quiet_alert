@@ -162,5 +162,164 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Admin Modal Logic ---
+    const adminOpenBtn = document.getElementById('admin-open-btn');
+    const adminLoginModal = document.getElementById('admin-login-modal');
+    const adminLoginClose = document.getElementById('admin-login-close');
+    const adminLoginForm = document.getElementById('admin-login-form');
+    const adminUsernameInput = document.getElementById('admin-username');
+    const adminPasswordInput = document.getElementById('admin-password');
+    const adminLoginError = document.getElementById('admin-login-error');
+    const adminPanelModal = document.getElementById('admin-panel-modal');
+    const adminPanelClose = document.getElementById('admin-panel-close');
+    const adminLogoutBtn = document.getElementById('admin-logout-btn');
+    const addTempAlertForm = document.getElementById('add-temp-alert-form');
+    const tempAlertLocation = document.getElementById('temp-alert-location');
+    const tempAlertThreat = document.getElementById('temp-alert-threat');
+    const tempAlertMessage = document.getElementById('temp-alert-message');
+    const tempAlertsList = document.getElementById('temp-alerts-list');
+    const addTempLocationForm = document.getElementById('add-temp-location-form');
+    const tempLocationName = document.getElementById('temp-location-name');
+    const tempLocationsList = document.getElementById('temp-locations-list');
+
+    let adminAuth = null; // {username, password}
+
+    function getAdminAuthHeader() {
+        if (!adminAuth) return {};
+        const token = btoa(`${adminAuth.username}:${adminAuth.password}`);
+        return { 'Authorization': `Basic ${token}` };
+    }
+
+    function showModal(modal) {
+        modal.style.display = 'block';
+        setTimeout(() => { modal.classList.add('show'); }, 10);
+    }
+    function hideModal(modal) {
+        modal.classList.remove('show');
+        setTimeout(() => { modal.style.display = 'none'; }, 200);
+    }
+
+    adminOpenBtn.addEventListener('click', () => {
+        showModal(adminLoginModal);
+        adminLoginError.textContent = '';
+        adminUsernameInput.value = '';
+        adminPasswordInput.value = '';
+        adminUsernameInput.focus();
+    });
+    adminLoginClose.addEventListener('click', () => hideModal(adminLoginModal));
+    adminPanelClose.addEventListener('click', () => hideModal(adminPanelModal));
+    window.addEventListener('click', (e) => {
+        if (e.target === adminLoginModal) hideModal(adminLoginModal);
+        if (e.target === adminPanelModal) hideModal(adminPanelModal);
+    });
+
+    async function tryAdminLogin(username, password) {
+        const res = await fetch('/api/admin/list-temp-alerts', {
+            headers: { ...getAdminAuthHeader(), 'Authorization': `Basic ${btoa(username+":"+password)}` }
+        });
+        return res.ok;
+    }
+
+    adminLoginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = adminUsernameInput.value.trim();
+        const password = adminPasswordInput.value;
+        const ok = await tryAdminLogin(username, password);
+        if (ok) {
+            adminAuth = { username, password };
+            hideModal(adminLoginModal);
+            showModal(adminPanelModal);
+            adminLoginError.textContent = '';
+            refreshAdminPanel();
+        } else {
+            adminLoginError.textContent = 'Login failed';
+        }
+    });
+
+    adminLogoutBtn.addEventListener('click', () => {
+        adminAuth = null;
+        hideModal(adminPanelModal);
+    });
+
+    async function refreshAdminPanel() {
+        // List temp alerts
+        const alertsRes = await fetch('/api/admin/list-temp-alerts', { headers: getAdminAuthHeader() });
+        const alertsData = alertsRes.ok ? await alertsRes.json() : { temporary_alerts: [] };
+        tempAlertsList.innerHTML = '';
+        alertsData.temporary_alerts.forEach((alert, idx) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<b>${alert.location}</b> | <span style='color:#ff4d4d'>${alert.threat_type}</span> | ${alert.message} <span style='color:#888'>${new Date(alert.alertDate).toLocaleString()}</span>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Remove';
+            btn.className = 'admin-remove-btn';
+            btn.onclick = async () => {
+                await fetch('/api/admin/remove-temp-alert', {
+                    method: 'POST',
+                    headers: { ...getAdminAuthHeader(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(alert)
+                });
+                refreshAdminPanel();
+                if (userLocation) startFetching(); // update main UI
+            };
+            li.appendChild(btn);
+            tempAlertsList.appendChild(li);
+        });
+        // List temp locations
+        const locRes = await fetch('/api/admin/list-temp-locations', { headers: getAdminAuthHeader() });
+        const locData = locRes.ok ? await locRes.json() : { temporary_locations: [] };
+        tempLocationsList.innerHTML = '';
+        locData.temporary_locations.forEach((loc) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<b>${loc}</b>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Remove';
+            btn.className = 'admin-remove-btn';
+            btn.onclick = async () => {
+                await fetch('/api/admin/remove-temp-location', {
+                    method: 'POST',
+                    headers: { ...getAdminAuthHeader(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ location: loc })
+                });
+                refreshAdminPanel();
+                fetchApprovedLocations(); // update main UI
+            };
+            li.appendChild(btn);
+            tempLocationsList.appendChild(li);
+        });
+    }
+
+    addTempAlertForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const alert = {
+            location: tempAlertLocation.value.trim(),
+            threat_type: tempAlertThreat.value.trim(),
+            message: tempAlertMessage.value.trim(),
+            alertDate: new Date().toISOString(),
+            status: 'active',
+            title: tempAlertThreat.value.trim()
+        };
+        await fetch('/api/admin/add-temp-alert', {
+            method: 'POST',
+            headers: { ...getAdminAuthHeader(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(alert)
+        });
+        addTempAlertForm.reset();
+        refreshAdminPanel();
+        if (userLocation) startFetching(); // update main UI
+    });
+
+    addTempLocationForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const location = tempLocationName.value.trim();
+        await fetch('/api/admin/add-temp-location', {
+            method: 'POST',
+            headers: { ...getAdminAuthHeader(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ location })
+        });
+        addTempLocationForm.reset();
+        refreshAdminPanel();
+        fetchApprovedLocations(); // update main UI
+    });
+
     fetchApprovedLocations();
 });

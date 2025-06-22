@@ -194,6 +194,106 @@ h1 {
     color: #888;
 }
 
+/* Admin Button */
+#admin-open-btn {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    opacity: 0.4;
+}
+#admin-open-btn:hover {
+    opacity: 1;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0; top: 0; width: 100vw; height: 100vh;
+    overflow: auto;
+    background: rgba(0,0,0,0.45);
+    transition: opacity 0.2s;
+    opacity: 0;
+}
+.modal.show { opacity: 1; display: block; }
+.modal-content {
+    background: #232323;
+    margin: 5% auto;
+    padding: 2rem 2.5rem;
+    border-radius: 14px;
+    width: 95%; max-width: 480px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    color: #e0e0e0;
+    position: relative;
+    animation: modalIn 0.2s;
+}
+@keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.close {
+    position: absolute;
+    right: 1.2rem;
+    top: 1.2rem;
+    color: #aaa;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.close:hover { color: #ff4d4d; }
+
+/* Admin Panel UI */
+.admin-panel-content {
+    max-width: 600px;
+    background: #232323;
+}
+.admin-form-row {
+    display: flex;
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+}
+.admin-form-row input, .admin-form-row button {
+    font-size: 1rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 7px;
+    border: 1px solid #444;
+    background: #181818;
+    color: #e0e0e0;
+}
+.admin-form-row button {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.admin-form-row button:hover { background: #0056b3; }
+.admin-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+}
+.admin-list li {
+    background: #181818;
+    margin-bottom: 0.5rem;
+    padding: 0.7rem 1rem;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 1rem;
+}
+.admin-remove-btn {
+    background: #ff4d4d;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.3rem 0.8rem;
+    margin-left: 1rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+}
+.admin-remove-btn:hover { background: #b30000; }
+.error-msg { color: #ff4d4d; margin-top: 0.5rem; }
 
 @keyframes pulse {
     0% {

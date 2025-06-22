@@ -20,6 +20,56 @@
         <div id="alerts-container"></div>
         <div id="history-container"></div>
     </div>
+    <!-- Small Admin Button -->
+    <button id="admin-open-btn" title="Admin" style="position:fixed;bottom:18px;right:18px;z-index:1000;opacity:0.4;background:#222;color:#fff;border-radius:50%;width:38px;height:38px;border:none;font-size:1.3rem;cursor:pointer;transition:opacity 0.2s;">⚙️</button>
+
+    <!-- Admin Login Modal -->
+    <div id="admin-login-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span class="close" id="admin-login-close">&times;</span>
+        <h2>Admin Login</h2>
+        <form id="admin-login-form">
+          <input type="text" id="admin-username" placeholder="Username" required autofocus>
+          <input type="password" id="admin-password" placeholder="Password" required>
+          <button type="submit">Login</button>
+          <div id="admin-login-error" class="error-msg"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Admin Panel Modal -->
+    <div id="admin-panel-modal" class="modal" style="display:none;">
+      <div class="modal-content admin-panel-content">
+        <span class="close" id="admin-panel-close">&times;</span>
+        <h2>Admin Panel</h2>
+        <button id="admin-logout-btn" style="float:right;">Logout</button>
+        <div style="clear:both;"></div>
+        <section>
+          <h3>Add Temporary Alert</h3>
+          <form id="add-temp-alert-form" class="admin-form-row">
+            <input type="text" id="temp-alert-location" placeholder="Location" required list="approved-locations">
+            <input type="text" id="temp-alert-threat" placeholder="Threat Type" required>
+            <input type="text" id="temp-alert-message" placeholder="Message" required>
+            <button type="submit">Add Alert</button>
+          </form>
+        </section>
+        <section>
+          <h3>Temporary Alerts</h3>
+          <ul id="temp-alerts-list" class="admin-list"></ul>
+        </section>
+        <section>
+          <h3>Add Temporary Location</h3>
+          <form id="add-temp-location-form" class="admin-form-row">
+            <input type="text" id="temp-location-name" placeholder="Location Name" required>
+            <button type="submit">Add Location</button>
+          </form>
+        </section>
+        <section>
+          <h3>Temporary Locations</h3>
+          <ul id="temp-locations-list" class="admin-list"></ul>
+        </section>
+      </div>
+    </div>
     <script src="app.js"></script>
 </body>
 </html>
