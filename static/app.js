@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
             approvedLocations = data.locations;
+            // Clear previous options to avoid duplicates
+            while (approvedLocationsDatalist.firstChild) {
+                approvedLocationsDatalist.removeChild(approvedLocationsDatalist.firstChild);
+            }
             approvedLocations.forEach(location => {
                 const option = document.createElement('option');
                 option.value = location;
@@ -237,11 +241,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     adminOpenBtn.addEventListener('click', () => {
-        showModal(adminLoginModal);
-        adminLoginError.textContent = '';
-        adminUsernameInput.value = '';
-        adminPasswordInput.value = '';
-        adminUsernameInput.focus();
+        // If admin creds are stored, try to use them and open panel directly
+        const storedAdmin = getAdminAuth();
+        if (storedAdmin) {
+            tryAdminLogin(storedAdmin.username, storedAdmin.password).then(ok => {
+                if (ok) {
+                    adminAuth = storedAdmin;
+                    showModal(adminPanelModal);
+                    refreshAdminPanel();
+                } else {
+                    clearAdminAuth();
+                    // fallback to login modal
+                    showModal(adminLoginModal);
+                    adminLoginError.textContent = '';
+                    adminUsernameInput.value = '';
+                    adminPasswordInput.value = '';
+                    adminUsernameInput.focus();
+                }
+            });
+        } else {
+            showModal(adminLoginModal);
+            adminLoginError.textContent = '';
+            adminUsernameInput.value = '';
+            adminPasswordInput.value = '';
+            adminUsernameInput.focus();
+        }
     });
     adminLoginClose.addEventListener('click', () => hideModal(adminLoginModal));
     adminPanelClose.addEventListener('click', () => hideModal(adminPanelModal));
@@ -257,6 +281,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.ok;
     }
 
+    // --- Admin Auth Persistence ---
+    function saveAdminAuth(auth) {
+        try {
+            localStorage.setItem('adminAuth', btoa(`${auth.username}:${auth.password}`));
+        } catch (e) {}
+    }
+    function getAdminAuth() {
+        try {
+            const token = localStorage.getItem('adminAuth');
+            if (!token) return null;
+            const [username, password] = atob(token).split(':');
+            return { username, password };
+        } catch (e) { return null; }
+    }
+    function clearAdminAuth() {
+        try {
+            localStorage.removeItem('adminAuth');
+        } catch (e) {}
+    }
+
     adminLoginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = adminUsernameInput.value.trim();
@@ -264,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ok = await tryAdminLogin(username, password);
         if (ok) {
             adminAuth = { username, password };
+            saveAdminAuth(adminAuth);
             hideModal(adminLoginModal);
             showModal(adminPanelModal);
             adminLoginError.textContent = '';
@@ -275,6 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     adminLogoutBtn.addEventListener('click', () => {
         adminAuth = null;
+        clearAdminAuth();
         hideModal(adminPanelModal);
     });
 
