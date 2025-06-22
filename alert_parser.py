@@ -151,24 +151,19 @@ def fetch_alerts():
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes
-        
         raw_content = response.content
-        
         try:
             if response.headers.get('Content-Encoding') == 'gzip':
-                try:
-                    # Attempt to decompress, as indicated by the header.
+                # Only decompress if content starts with gzip magic number
+                if raw_content[:2] == b'\x1f\x8b':
                     decompressed_content = gzip.decompress(raw_content)
                     json_data = json.loads(decompressed_content.decode('utf-8'))
-                except gzip.BadGzipFile:
-                    # The server is sending a 'gzip' header but the content is not
-                    # actually compressed. Log a warning and parse as plain text.
-                    print("Warning: Server sent 'Content-Encoding: gzip' header for uncompressed content.")
+                else:
+                    # Content is not actually gzipped, just parse as JSON
                     json_data = response.json()
             else:
                 # No compression header, parse as plain JSON.
                 json_data = response.json()
-            
             return json_data
         except json.JSONDecodeError:
             print("Error: Malformed JSON response from the API.")
