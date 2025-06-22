@@ -76,6 +76,22 @@ h1 {
     transform: none;
 }
 
+#change-location-btn {
+    margin-left: 1rem;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    background: #444;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#change-location-btn:hover {
+    background: #222;
+}
+
 #alerts-container {
     margin-bottom: 2rem;
     min-height: 120px;

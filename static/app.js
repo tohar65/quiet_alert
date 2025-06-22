@@ -138,12 +138,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- State memory for last location ---
+    function saveLastLocation(location) {
+        try {
+            localStorage.setItem('lastLocation', location);
+        } catch (e) {}
+    }
+    function getLastLocation() {
+        try {
+            return localStorage.getItem('lastLocation') || '';
+        } catch (e) { return ''; }
+    }
+
+    // --- UI for changing location ---
+    let changeLocationBtn = null;
+    function showChangeLocationButton() {
+        if (!changeLocationBtn) {
+            changeLocationBtn = document.createElement('button');
+            changeLocationBtn.id = 'change-location-btn';
+            changeLocationBtn.textContent = 'Change Location';
+            changeLocationBtn.style.marginLeft = '1rem';
+            changeLocationBtn.style.padding = '0.8rem 1.5rem';
+            changeLocationBtn.style.borderRadius = '8px';
+            changeLocationBtn.style.border = 'none';
+            changeLocationBtn.style.background = '#444';
+            changeLocationBtn.style.color = '#fff';
+            changeLocationBtn.style.fontWeight = 'bold';
+            changeLocationBtn.style.cursor = 'pointer';
+            changeLocationBtn.addEventListener('click', () => {
+                locationInput.disabled = false;
+                checkAlertsBtn.disabled = false;
+                locationInput.focus();
+                changeLocationBtn.style.display = 'none';
+            });
+            locationInput.parentNode.appendChild(changeLocationBtn);
+        }
+        changeLocationBtn.style.display = 'inline-block';
+    }
+
+    // --- Modified startFetching to save location and show change button ---
     const startFetching = () => {
         userLocation = locationInput.value.trim();
         if (fetchInterval) {
             clearInterval(fetchInterval);
         }
         if (userLocation) {
+            saveLastLocation(userLocation);
+            locationInput.disabled = true;
+            checkAlertsBtn.disabled = true;
+            showChangeLocationButton();
             const fetchAndRender = async () => {
                 const allAlerts = await fetchAllAlerts();
                 displayAlerts(allAlerts);
@@ -155,6 +198,16 @@ document.addEventListener('DOMContentLoaded', () => {
             alertsContainer.innerHTML = '<div class="alert-loading">Please enter a location.</div>';
         }
     };
+
+    // --- On load, restore last location if available after locations are fetched ---
+    fetchApprovedLocations().then(() => {
+        const lastLoc = getLastLocation();
+        if (lastLoc && approvedLocations.includes(lastLoc)) {
+            locationInput.value = lastLoc;
+            checkAlertsBtn.disabled = false;
+            startFetching();
+        }
+    });
 
     checkAlertsBtn.addEventListener('click', startFetching);
 
