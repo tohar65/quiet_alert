@@ -65,7 +65,6 @@ class AlertManager:
         # Replace alert_history with the latest fetched alerts
         self.alert_history = list(current_alerts)
         self.expire_alerts()
-        print(f"alert history length: {len(self.alert_history)}")
 
     def expire_alerts(self):
         """Removes alerts that have not been seen for the expiration period."""
@@ -179,14 +178,17 @@ def get_alert_history(location: str):
 
 @app.get("/api/alerts/all")
 def get_all_alerts(location: Optional[str] = None):
-    all_locations = set(APPROVED_LOCATIONS) | temporary_locations
-    if location and location not in all_locations:
+    def normalize(s):
+        return s.strip() if isinstance(s, str) else s
+    all_locations = set(normalize(loc) for loc in APPROVED_LOCATIONS) | set(normalize(loc) for loc in temporary_locations)
+    norm_location = normalize(location)
+    if norm_location and norm_location not in all_locations:
         raise HTTPException(status_code=400, detail="Location not approved")
     alerts = alert_manager.alert_history
-    if location:
-        alerts = [alert for alert in alerts if alert.location == location]
+    if norm_location:
+        alerts = [alert for alert in alerts if normalize(alert.location) == norm_location]
     alerts_sorted = sorted(alerts, key=lambda x: x.alertDate, reverse=True)
-    temp_alerts = [a for a in temporary_alerts if (not location or a["location"] == location)]
+    temp_alerts = [a for a in temporary_alerts if (not norm_location or normalize(a["location"]) == norm_location)]
     # Show both real and temp alerts, sorted by date
     all_alerts = [alert.to_dict() for alert in alerts_sorted] + temp_alerts
     all_alerts_sorted = sorted(all_alerts, key=lambda x: x.get("alertDate", ""), reverse=True)

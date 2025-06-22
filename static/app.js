@@ -181,6 +181,10 @@ document.addEventListener('DOMContentLoaded', () => {
             locationInput.value = lastLoc;
             checkAlertsBtn.disabled = false;
             startFetching();
+        } else {
+            // If last location is not approved, clear the input and disable the button
+            locationInput.value = '';
+            checkAlertsBtn.disabled = true;
         }
     });
 
