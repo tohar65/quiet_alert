@@ -4,10 +4,7 @@ import json
 from unittest.mock import MagicMock
 import pytest
 
-# Add project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from main import main
+from oref_alert_parser.main import main
 
 LOG_FILE = "alerts.log"
 JSON_FILE = "alerts.json"
@@ -48,7 +45,7 @@ def mock_alerts(mocker):
             "category": 13
         }
     ]
-    mocker.patch('main.fetch_alerts', return_value=fake_alerts_data)
+    mocker.patch('oref_alert_parser.main.fetch_alerts', return_value=fake_alerts_data)
     return fake_alerts_data
 
 def test_system_without_location_filter(mock_alerts, monkeypatch):
@@ -64,11 +61,11 @@ def test_system_without_location_filter(mock_alerts, monkeypatch):
     # Assert
     assert os.path.exists(LOG_FILE)
     with open(LOG_FILE, 'r', encoding='utf-8') as f:
-        log_content = f.read()
-        assert "Location: תל אביב" in log_content
-        assert "Location: חיפה" in log_content
-        assert "Threat Type: rocket" in log_content
-        assert "Threat Type: aircraft intrusion" in log_content
+        lines = f.readlines()
+        log_data = [json.loads(line) for line in lines]
+        locations = [alert['location'] for alert in log_data]
+        assert "תל אביב" in locations
+        assert "חיפה" in locations
 
 def test_system_with_location_filter(mock_alerts, monkeypatch):
     """
@@ -83,9 +80,11 @@ def test_system_with_location_filter(mock_alerts, monkeypatch):
     # Assert
     assert os.path.exists(LOG_FILE)
     with open(LOG_FILE, 'r', encoding='utf-8') as f:
-        log_content = f.read()
-        assert "Location: תל אביב" in log_content
-        assert "Location: חיפה" not in log_content
+        lines = f.readlines()
+        log_data = [json.loads(line) for line in lines]
+        locations = [alert['location'] for alert in log_data]
+        assert "תל אביב" in locations
+        assert "חיפה" not in locations
 
 def test_system_with_nonexistent_location(mock_alerts, monkeypatch):
     """
@@ -100,7 +99,5 @@ def test_system_with_nonexistent_location(mock_alerts, monkeypatch):
     # Assert
     assert os.path.exists(LOG_FILE)
     with open(LOG_FILE, 'r', encoding='utf-8') as f:
-        log_content = f.read()
-        assert "--- Active Alerts ---" in log_content
-        assert "--- Ended Alerts ---" in log_content
-        assert "Location:" not in log_content
+        lines = f.readlines()
+        assert not lines

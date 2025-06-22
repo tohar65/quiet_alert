@@ -1,6 +1,5 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pytest
 from unittest.mock import patch, mock_open, MagicMock
 import unittest.mock
@@ -9,21 +8,21 @@ from datetime import datetime
 import json
 import re
 
+
 # Mock colorama before it's imported by the module we're testing
 from unittest.mock import MagicMock
 import sys
 sys.modules['colorama'] = MagicMock()
 
-from alert_parser import (
-    parse_alert,
-    categorize_alerts,
+from oref_alert_parser.parser import (
+    OrefAlertParser,
     save_alerts,
     display_alerts,
     fetch_alerts,
     process_alerts,
     filter_alerts_by_location
 )
-from alert_types import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE
+from oref_alert_parser.models import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE
 
 # --- Fixtures ---
 
@@ -85,14 +84,16 @@ def mock_alerts_list_raw(mock_active_alert_raw, mock_upcoming_alert_raw, mock_en
 @pytest.fixture
 def mock_parsed_alerts(mock_alerts_list_raw):
     """Fixture for a list of parsed Alert objects."""
-    return categorize_alerts(mock_alerts_list_raw)
+    parser = OrefAlertParser(mock_alerts_list_raw)
+    return parser.alerts
 
 
 # --- Test Functions ---
 
 def test_parse_active_alert(mock_active_alert_raw):
     """Test parsing of a standard active alert."""
-    alert = parse_alert(mock_active_alert_raw)
+    parser = OrefAlertParser([mock_active_alert_raw])
+    alert = parser.alerts[0]
     assert isinstance(alert, Alert)
     assert alert.status == AlertStatus.ACTIVE
     assert alert.threat_type == ThreatType.ROCKET
@@ -100,21 +101,24 @@ def test_parse_active_alert(mock_active_alert_raw):
 
 def test_parse_upcoming_alert(mock_upcoming_alert_raw):
     """Test parsing of an upcoming alert."""
-    alert = parse_alert(mock_upcoming_alert_raw)
+    parser = OrefAlertParser([mock_upcoming_alert_raw])
+    alert = parser.alerts[0]
     assert alert.status == AlertStatus.UPCOMING
     assert alert.threat_type is None # Threat type is not defined for upcoming alerts
     assert alert.location == "אשקלון"
 
 def test_parse_ended_alert(mock_ended_alert_raw):
     """Test parsing of an ended missile alert."""
-    alert = parse_alert(mock_ended_alert_raw)
+    parser = OrefAlertParser([mock_ended_alert_raw])
+    alert = parser.alerts[0]
     assert alert.status == AlertStatus.ENDED
     assert alert.threat_type == ThreatType.ROCKET
     assert alert.location == "שדרות"
 
 def test_parse_ended_aircraft_intrusion_alert(mock_ended_aircraft_intrusion_alert_raw):
     """Test parsing of an ended aircraft intrusion alert."""
-    alert = parse_alert(mock_ended_aircraft_intrusion_alert_raw)
+    parser = OrefAlertParser([mock_ended_aircraft_intrusion_alert_raw])
+    alert = parser.alerts[0]
     assert alert.status == AlertStatus.ENDED
     assert alert.threat_type == ThreatType.AIRCRAFT_INTRUSION
     assert alert.location == "מטולה"
@@ -122,7 +126,8 @@ def test_parse_ended_aircraft_intrusion_alert(mock_ended_aircraft_intrusion_aler
 def test_parse_alert_missing_keys():
     """Test parsing an alert with missing keys."""
     raw_alert = {"data": "Someplace"}
-    alert = parse_alert(raw_alert)
+    parser = OrefAlertParser([raw_alert])
+    alert = parser.alerts[0]
     assert alert.title == ""
     assert alert.status is None
     assert alert.threat_type is None
@@ -136,12 +141,13 @@ def test_parse_alert_unknown_ended_type():
         "category": 4
     }
     with pytest.raises(ValueError, match="Unexpected ended alert type: אירוע לא מזוהה - הסתיים"):
-        parse_alert(raw_alert)
+        OrefAlertParser([raw_alert])
 
 def test_categorize_alerts(mock_alerts_list_raw):
     """Test categorizing a list of alerts."""
     # The mock_upcoming_alert_raw fixture now correctly has category 14
-    alerts = categorize_alerts(mock_alerts_list_raw)
+    parser = OrefAlertParser(mock_alerts_list_raw)
+    alerts = parser.alerts
     assert len(alerts) == 3
     assert all(isinstance(a, Alert) for a in alerts)
     assert alerts[0].status == AlertStatus.ACTIVE
@@ -150,7 +156,8 @@ def test_categorize_alerts(mock_alerts_list_raw):
 
 def test_categorize_empty_list():
     """Test categorizing an empty list."""
-    assert categorize_alerts([]) == []
+    parser = OrefAlertParser([])
+    assert parser.alerts == []
 
 @patch("builtins.open", new_callable=mock_open)
 @patch("json.dump")
@@ -207,33 +214,33 @@ def test_fetch_alerts_failure(mock_get):
     
     assert data is None
 
-@patch('alert_parser.fetch_alerts')
-@patch('alert_parser.categorize_alerts')
-@patch('alert_parser.save_alerts')
-@patch('alert_parser.display_alerts')
+@patch('oref_alert_parser.parser.fetch_alerts')
+@patch('oref_alert_parser.parser.OrefAlertParser')
+@patch('oref_alert_parser.parser.save_alerts')
+@patch('oref_alert_parser.parser.display_alerts')
 def test_process_alerts_workflow(
-    mock_display, mock_save, mock_categorize, mock_fetch, 
+    mock_display, mock_save, mock_parser, mock_fetch,
     mock_alerts_list_raw, mock_parsed_alerts
 ):
     """Test the main process_alerts workflow."""
     mock_fetch.return_value = mock_alerts_list_raw
-    mock_categorize.return_value = mock_parsed_alerts
-    
-    process_alerts()
-    
-    mock_fetch.assert_called_once()
-    mock_categorize.assert_called_once_with(mock_alerts_list_raw)
-    mock_save.assert_called_once_with(mock_parsed_alerts)
-    mock_display.assert_called_once_with(mock_parsed_alerts)
+    mock_parser.return_value.get_alerts.return_value = [a.to_dict() for a in mock_parsed_alerts]
 
-@patch('alert_parser.fetch_alerts', return_value=None)
-@patch('alert_parser.categorize_alerts')
-def test_process_alerts_no_data(mock_categorize, mock_fetch):
+    process_alerts()
+
+    mock_fetch.assert_called_once()
+    mock_parser.assert_called_once_with(mock_alerts_list_raw)
+    mock_save.assert_called_once()
+    mock_display.assert_called_once()
+
+@patch('oref_alert_parser.parser.fetch_alerts', return_value=None)
+@patch('oref_alert_parser.parser.OrefAlertParser')
+def test_process_alerts_no_data(mock_parser, mock_fetch):
     """Test the process_alerts workflow when fetch returns no data."""
     process_alerts()
-    
+
     mock_fetch.assert_called_once()
-    mock_categorize.assert_not_called()
+    mock_parser.assert_not_called()
 @pytest.fixture
 def sample_alerts_for_filtering():
     """Fixture for a list of Alert objects for location filtering tests."""

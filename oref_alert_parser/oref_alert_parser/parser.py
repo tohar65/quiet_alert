@@ -4,81 +4,91 @@ import json
 import gzip
 from datetime import datetime
 from colorama import Fore
-from alert_types import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
+from .models import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
 
 
-def parse_alert(alert):
-    """Converts a single Pikud Haoref alert dict to an Alert object with resolved status and threat type."""
-    oref_category = alert.get("category")
-    title = alert.get("title", "")
-    status = CATEGORY_TO_STATUS.get(oref_category)
-    threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
-
-    raw_date = alert.get("alertDate")
-    alert_date_obj = None
-    if isinstance(raw_date, str):
-        try:
-            # The API provides dates in "YYYY-MM-DD HH:MM:SS" format.
-            alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError):
-            # In case of format errors or if raw_date is None, leave it as None.
-            alert_date_obj = None
-    elif isinstance(raw_date, datetime):
-        # If it's already a datetime object, use it directly.
-        alert_date_obj = raw_date
-
-    # The category for ended alerts can be inconsistent. A reliable way to identify
-    # them is by checking for "ended" ("הסתיים" or "הסתיימה") in the title.
-    if "הסתיים" in title or "הסתיימה" in title:
-        status = AlertStatus.ENDED
-        
-        # For ended alerts, the threat type must be parsed from the title,
-        # as the category might not be informative.
-        threat_type_from_title = None
-        for ttype, pattern in THREAT_PATTERNS.items():
-            if pattern.search(title):
-                threat_type_from_title = ttype
-                break
-        
-        if threat_type_from_title:
-            threat_type = threat_type_from_title
+class OrefAlertParser:
+    def __init__(self, alerts_data):
+        if isinstance(alerts_data, str):
+            self.alerts_data = json.loads(alerts_data)
         else:
-            # If it's an ended alert but we can't determine the type, it's an error.
-            raise ValueError(f"Unexpected ended alert type: {title}")
+            self.alerts_data = alerts_data
+        self.alerts = self._categorize_alerts()
+        self.alerts = self._deduplicate_alerts()
 
-    return Alert(
-        alertDate=alert_date_obj,
-        title=title,
-        location=alert.get("data"),
-        oref_category=oref_category,
-        status=status,
-        threat_type=threat_type
-    )
+    def _parse_alert(self, alert):
+        """Converts a single Pikud Haoref alert dict to an Alert object with resolved status and threat type."""
+        oref_category = alert.get("category")
+        title = alert.get("title", "")
+        status = CATEGORY_TO_STATUS.get(oref_category)
+        threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
 
+        raw_date = alert.get("alertDate")
+        alert_date_obj = None
+        if isinstance(raw_date, str):
+            try:
+                # The API provides dates in "YYYY-MM-DD HH:MM:SS" format.
+                alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError):
+                # In case of format errors or if raw_date is None, leave it as None.
+                alert_date_obj = None
+        elif isinstance(raw_date, datetime):
+            # If it's already a datetime object, use it directly.
+            alert_date_obj = raw_date
 
-def categorize_alerts(alerts):
-    """Converts all alerts to Alert objects with status and threat_type fields."""
-    return [parse_alert(alert) for alert in alerts]
+        # The category for ended alerts can be inconsistent. A reliable way to identify
+        # them is by checking for "ended" ("הסתיים" or "הסתיימה") in the title.
+        if "הסתיים" in title or "הסתיימה" in title:
+            status = AlertStatus.ENDED
+            
+            # For ended alerts, the threat type must be parsed from the title,
+            # as the category might not be informative.
+            threat_type_from_title = None
+            for ttype, pattern in THREAT_PATTERNS.items():
+                if pattern.search(title):
+                    threat_type_from_title = ttype
+                    break
+            
+            if threat_type_from_title:
+                threat_type = threat_type_from_title
+            else:
+                # If it's an ended alert but we can't determine the type, it's an error.
+                raise ValueError(f"Unexpected ended alert type: {title}")
 
-
-def deduplicate_alerts(alerts: list[Alert]) -> list[Alert]:
-    """Removes duplicate alerts based on location, threat_type, and rounded alertDate."""
-    seen = set()
-    unique_alerts = []
-    for alert in alerts:
-        # Use a tuple of (location, threat_type, rounded_time) as a unique key
-        key = (
-            alert.location,
-            alert.threat_type,
-            str(alert.status),
-            str(alert.title),
-            str(alert.oref_category),
-            str(alert.alertDate)[:16]  # e.g., up to minute
+        return Alert(
+            alertDate=alert_date_obj,
+            title=title,
+            location=alert.get("data"),
+            oref_category=oref_category,
+            status=status,
+            threat_type=threat_type
         )
-        if key not in seen:
-            seen.add(key)
-            unique_alerts.append(alert)
-    return unique_alerts
+
+    def _categorize_alerts(self):
+        """Converts all alerts to Alert objects with status and threat_type fields."""
+        return [self._parse_alert(alert) for alert in self.alerts_data]
+
+    def _deduplicate_alerts(self) -> list[Alert]:
+        """Removes duplicate alerts based on location, threat_type, and rounded alertDate."""
+        seen = set()
+        unique_alerts = []
+        for alert in self.alerts:
+            # Use a tuple of (location, threat_type, rounded_time) as a unique key
+            key = (
+                alert.location,
+                alert.threat_type,
+                str(alert.status),
+                str(alert.title),
+                str(alert.oref_category),
+                str(alert.alertDate)[:16]  # e.g., up to minute
+            )
+            if key not in seen:
+                seen.add(key)
+                unique_alerts.append(alert)
+        return unique_alerts
+
+    def get_alerts(self):
+        return self.alerts
 
 
 def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list[Alert]:
@@ -103,6 +113,8 @@ def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list
     ]
     
     return filtered_alerts
+
+
 def get_cities_from_alerts(alerts: list[Alert]) -> list[str]:
     """Extracts a unique list of cities from a list of alerts."""
     cities = set()
@@ -183,7 +195,7 @@ def process_alerts():
     """Main function to fetch, save, and display alerts."""
     alerts_data = fetch_alerts()
     if alerts_data:
-        alerts = categorize_alerts(alerts_data)
-        alerts = deduplicate_alerts(alerts)
+        parser = OrefAlertParser(alerts_data)
+        alerts = parser.get_alerts()
         save_alerts(alerts)
         display_alerts(alerts)

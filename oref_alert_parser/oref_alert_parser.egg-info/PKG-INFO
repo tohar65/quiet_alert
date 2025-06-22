@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: oref_alert_parser
+Version: 0.1.0
+Summary: A package to parse alerts from the Home Front Command (Oref)
+Home-page: https://github.com/tohar65/quiet_alert
+Author: Tohar Laufer
+Author-email: tohar@example.com
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: summary

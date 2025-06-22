@@ -1,74 +1,61 @@
 # Quiet Alert
 
-Quiet Alert is a web application designed to fetch, parse, and display real-time alerts from a remote source. It provides a clean and quiet interface for monitoring alerts, with features for filtering by location and viewing historical data. The application includes both a web interface and a command-line tool.
+This project is composed of two main components:
 
-## Features
+1.  **`oref_alert_parser`**: A Python package for fetching and parsing real-time alerts.
+2.  **`web_app`**: A Flask-based web application that uses the `oref_alert_parser` package to display alerts.
 
--   **Real-time Alert Monitoring**: Fetches and displays alerts as they happen.
--   **Alert Categorization**: Automatically categorizes alerts based on their content.
--   **Location Filtering**: Allows users to view alerts for specific approved locations.
--   **Alert History**: Keeps a history of alerts for each location.
--   **Web Interface**: A user-friendly web UI for viewing and filtering alerts.
--   **Command-Line Interface**: A CLI tool for fetching and logging alerts.
--   **Comprehensive Test Suite**: Includes unit, integration, system, and end-to-end tests.
+## oref_alert_parser
 
-## Tech Stack
+This is a self-contained Python package for fetching and parsing alerts from Israel's Home Front Command (Pikud Haoref) API.
 
--   **Backend**: Python, FastAPI
--   **Frontend**: HTML, CSS, Vanilla JavaScript
--   **Testing**: Pytest, Selenium, `pytest-mock`
+### Installation
 
-## Setup and Installation
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd quiet_alert
-    ```
-
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-    ```
-
-3.  **Install the dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-## Running the Application
-
-### Web Server
-
-To run the web application, use `uvicorn`:
+To install the package and its dependencies for development, run the following command from the `oref_alert_parser` directory:
 
 ```bash
-uvicorn web_server:app --reload
+pip install -e .
 ```
 
-The application will be available at `http://127.0.0.1:8000`.
+### Testing
 
-### Command-Line Interface (CLI)
+To run the tests for the package, first install the test dependencies:
 
-The project also includes a command-line tool for fetching and logging alerts.
+```bash
+pip install -r requirements.txt
+```
 
--   **Fetch all alerts:**
-    ```bash
-    python main.py
-    ```
-
--   **Filter by location:**
-    ```bash
-    python main.py --locations "Location 1" "Location 2"
-    ```
-
-## Running Tests
-
-The project has a comprehensive test suite. To run the tests, use `pytest`:
+Then, run pytest from the `oref_alert_parser` directory:
 
 ```bash
 pytest
 ```
 
-This will run all tests in the `tests/` directory, including unit, integration, system, and end-to-end tests.
+## Web App
+
+This is a Flask web application that consumes the `oref_alert_parser` package to provide a simple web interface for viewing alerts.
+
+### Installation and Running
+
+1.  Navigate to the `web_app` directory:
+    ```bash
+    cd web_app
+    ```
+2.  Install the `oref_alert_parser` package in editable mode from the parent directory and the web app's dependencies:
+    ```bash
+    pip install -e ../oref_alert_parser
+    pip install -r requirements.txt
+    ```
+3.  Run the web server:
+    ```bash
+    python web_server.py
+    ```
+    The application will be available at `http://127.0.0.1:8080`.
+
+### Testing
+
+To run the tests for the web app, navigate to the `web_app` directory and run pytest:
+
+```bash
+cd web_app
+pytest

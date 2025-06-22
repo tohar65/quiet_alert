@@ -6,7 +6,7 @@ import requests
 from requests.exceptions import ConnectionError
 
 def run_server():
-    uvicorn.run("web_server:app", host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run("oref_alert_parser.web_server:app", host="127.0.0.1", port=8000, log_level="info")
 
 @pytest.fixture(scope="session")
 def live_server():

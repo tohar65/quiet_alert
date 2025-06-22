@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from alert_types import Alert, AlertStatus, ThreatType
+from oref_alert_parser.models import Alert, AlertStatus, ThreatType
 
 class TestAlertTypes(unittest.TestCase):
 
