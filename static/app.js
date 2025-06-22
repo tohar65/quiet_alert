@@ -80,6 +80,13 @@ document.addEventListener('DOMContentLoaded', () => {
             threatElement.textContent = alert.title;
             alertElement.appendChild(threatElement);
 
+            if (alert.message) {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'alert-message';
+                messageElement.textContent = alert.message;
+                alertElement.appendChild(messageElement);
+            }
+
             const timeElement = document.createElement('div');
             timeElement.className = 'alert-time';
             timeElement.textContent = new Date(alert.alertDate).toLocaleString();
@@ -113,6 +120,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 locationElement.className = 'history-location';
                 locationElement.textContent = alert.location;
                 detailsElement.appendChild(locationElement);
+                if (alert.message) {
+                    const messageElement = document.createElement('div');
+                    messageElement.className = 'history-message';
+                    messageElement.textContent = alert.message;
+                    detailsElement.appendChild(messageElement);
+                }
                 historyElement.appendChild(detailsElement);
                 const timeElement = document.createElement('div');
                 timeElement.className = 'history-time';
