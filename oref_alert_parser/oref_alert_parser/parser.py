@@ -185,10 +185,10 @@ def fetch_alerts():
             print(f"Actual Content Length (decoded text): {len(response.text)}")
             print("Response Text (first 500 chars):")
             print(response.text[:500])
-            return None
+            return []
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
-        return None
+        return []
 
 
 def process_alerts():
