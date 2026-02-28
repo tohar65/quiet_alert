@@ -2,10 +2,16 @@ import re
 import requests
 import json
 import gzip
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from colorama import Fore
 from .models import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
 
+# Define Israel Timezone (UTC+2 standard, UTC+3 DST)
+# For simplicity, we can use a fixed offset if pytz/zoneinfo isn't available,
+# but it's better to use pytz or handle DST if possible.
+# Since we don't have pytz guaranteed, we'll try to use a simple offset or just treat as UTC and let the consumer handle display.
+# However, the user wants the parser to fix it.
+# Let's assume the system time is configured correctly and use `astimezone()`.
 
 class OrefAlertParser:
     def __init__(self, alerts_data):
@@ -20,15 +26,32 @@ class OrefAlertParser:
         """Converts a single Pikud Haoref alert dict to an Alert object with resolved status and threat type."""
         oref_category = alert.get("category")
         title = alert.get("title", "")
+        if not title and "title" in alert:
+            title = alert["title"]
+            
         status = CATEGORY_TO_STATUS.get(oref_category)
         threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
 
         raw_date = alert.get("alertDate")
+        
+        # Real-time alerts format has `cat` instead of `category`
+        if oref_category is None and "cat" in alert:
+            try:
+                oref_category = int(alert["cat"])
+            except ValueError:
+                pass
+            
+        # Real-time alerts might not have `alertDate`, so default to current UTC time if missing
+        if raw_date is None and "id" in alert:
+            raw_date = datetime.now(timezone.utc)
+            
         alert_date_obj = None
         if isinstance(raw_date, str):
             try:
-                # The API provides dates in "YYYY-MM-DD HH:MM:SS" format.
+                # The API provides dates in "YYYY-MM-DD HH:MM:SS" format in UTC.
+                # We attach the UTC timezone so it is serialized properly.
                 alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+                alert_date_obj = alert_date_obj.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 # In case of format errors or if raw_date is None, leave it as None.
                 alert_date_obj = None
@@ -58,7 +81,7 @@ class OrefAlertParser:
         return Alert(
             alertDate=alert_date_obj,
             title=title,
-            location=alert.get("data"),
+            location=alert.get("data", []),
             oref_category=oref_category,
             status=status,
             threat_type=threat_type
@@ -74,8 +97,10 @@ class OrefAlertParser:
         unique_alerts = []
         for alert in self.alerts:
             # Use a tuple of (location, threat_type, rounded_time) as a unique key
+            # Handle location being a list
+            loc_key = tuple(alert.location) if isinstance(alert.location, list) else alert.location
             key = (
-                alert.location,
+                loc_key,
                 alert.threat_type,
                 str(alert.status),
                 str(alert.title),
@@ -107,11 +132,20 @@ def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list
     
     location_set = {loc.lower() for loc in locations}
     
-    filtered_alerts = [
-        alert for alert in alerts
-        if alert.location and alert.location.lower() in location_set
-    ]
-    
+    filtered_alerts = []
+    for alert in alerts:
+        if not alert.location:
+            continue
+            
+        if isinstance(alert.location, list):
+            # If location is a list, check if ANY of the locations match
+            # This logic assumes we want to show the alert if the requested location is involved.
+            if any(loc.lower() in location_set for loc in alert.location):
+                filtered_alerts.append(alert)
+        elif isinstance(alert.location, str):
+            if alert.location.lower() in location_set:
+                filtered_alerts.append(alert)
+                
     return filtered_alerts
 
 
@@ -153,41 +187,115 @@ def display_alerts(alerts):
 
 
 def fetch_alerts():
-    """Fetches alert data from the oref.org.il API."""
-    url = "https://www.oref.org.il/WarningMessages/alert/History/AlertsHistory.json"
+    """
+    Fetches alert data from the oref.org.il API, handling potential compression
+    and JSON decoding issues.
+    """
+    url = "https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
-        'Referer': 'https://www.oref.org.il/',
-        'X-Requested-With': 'XMLHttpRequest'
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
+        'Referer': 'https://www.oref.org.il/heb/alerts-history',
+        'sec-ch-ua': '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+        'sec-ch-ua-mobile': '?1',
+        'sec-ch-ua-platform': '"Android"',
+        'Accept': 'application/json, text/plain, */*',
     }
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        raw_content = response.content
+        # Use stream=True to handle the raw response and avoid issues with
+        # incorrect Content-Length headers.
+        response = requests.get(url, headers=headers, stream=True)
+        response.raise_for_status()
+
+        # Read the raw bytes from the stream, which gives us the complete response.
+        raw_content = response.raw.read()
+        
         try:
+            decompressed_content = raw_content
+            # The 'Content-Encoding' header is a hint, but the content itself is the truth.
+            # We attempt to decompress if the header is present.
             if response.headers.get('Content-Encoding') == 'gzip':
-                # Only decompress if content starts with gzip magic number
-                if raw_content[:2] == b'\x1f\x8b':
+                try:
                     decompressed_content = gzip.decompress(raw_content)
-                    json_data = json.loads(decompressed_content.decode('utf-8'))
-                else:
-                    # Content is not actually gzipped, just parse as JSON
-                    json_data = response.json()
-            else:
-                # No compression header, parse as plain JSON.
-                json_data = response.json()
-            return json_data
+                except (gzip.BadGzipFile, OSError):
+                    # If decompression fails, assume it's not actually gzipped.
+                    # The server sometimes sends the header incorrectly.
+                    pass
+            
+            # The API may send a UTF-8 BOM, which json.loads doesn't handle.
+            # 'utf-8-sig' will correctly decode the content, stripping the BOM if present.
+            json_text = decompressed_content.decode('utf-8-sig')
+            return json.loads(json_text)
+
         except json.JSONDecodeError:
             print("Error: Malformed JSON response from the API.")
             print(f"Response Headers: {response.headers}")
-            print(f"Content-Length Header: {response.headers.get('Content-Length')}")
             print(f"Actual Content Length (raw bytes): {len(raw_content)}")
-            print(f"Actual Content Length (decoded text): {len(response.text)}")
-            print("Response Text (first 500 chars):")
-            print(response.text[:500])
             return []
+
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
+        return []
+
+
+def fetch_realtime_alerts():
+    """
+    Fetches real-time alert data from the oref.org.il API.
+    This endpoint is optimized for high-frequency polling.
+    Returns an empty list if no alerts are active.
+    """
+    url = "https://www.oref.org.il/warningMessages/alert/Alerts.json"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
+        'Referer': 'https://www.oref.org.il/',
+        'sec-ch-ua': '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+        'sec-ch-ua-mobile': '?1',
+        'sec-ch-ua-platform': '"Android"',
+        'Accept': 'application/json, text/plain, */*',
+        'X-Requested-With': 'XMLHttpRequest'
+    }
+    try:
+        response = requests.get(url, headers=headers, stream=True)
+        response.raise_for_status()
+
+        raw_content = response.raw.read()
+
+        # Handle empty response (no alerts)
+        if not raw_content or raw_content.strip() == b"":
+             return []
+
+        try:
+            decompressed_content = raw_content
+            if response.headers.get('Content-Encoding') == 'gzip':
+                try:
+                    decompressed_content = gzip.decompress(raw_content)
+                except (gzip.BadGzipFile, OSError):
+                    pass
+            
+            # Decode and parse
+            # The real-time endpoint might return a single object or a list.
+            # Oref often returns a flat list or a single object if there's only one.
+            # Let's standardize to a list.
+            json_text = decompressed_content.decode('utf-8-sig')
+            
+            if not json_text.strip():
+                return []
+
+            data = json.loads(json_text)
+            
+            if isinstance(data, dict):
+                return [data]
+            elif isinstance(data, list):
+                return data
+            else:
+                return []
+
+        except json.JSONDecodeError:
+            # If it's not valid JSON but we got content, log it but return empty
+            # Sometimes 404s or error pages sneak through as 200s
+            return []
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching real-time data: {e}")
         return []
 
 

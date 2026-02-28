@@ -17,14 +17,17 @@ def test_get_alerts(client, mocker):
     Test case for getting alerts.
     """
     # Arrange
+    from oref_alert_parser.parser import OrefAlertParser
     test_alert = {
         "id": "12345",
-        "category": "1",
+        "category": 1,
         "title": "missiles",
         "data": "Test Location",
         "alertDate": "2023-10-07 18:00:00"
     }
-    mocker.patch('web_app.web_server.fetch_alerts', return_value=[test_alert])
+    
+    parser = OrefAlertParser([test_alert])
+    mocker.patch('web_app.web_server.realtime_alerts_cache', parser.get_alerts())
 
     # Act
     response = client.get('/alerts')

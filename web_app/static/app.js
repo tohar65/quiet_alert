@@ -2,12 +2,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const locationInput = document.getElementById('location-input');
     const checkAlertsBtn = document.getElementById('check-alerts-btn');
     const alertsContainer = document.getElementById('alerts-container');
+    const timerContainer = document.getElementById('timer-container');
     const approvedLocationsDatalist = document.getElementById('approved-locations');
 
     let userLocation = '';
     let fetchInterval;
     let errorCounter = 0;
     let approvedLocations = [];
+    
+    // Timer state
+    let lastAlertTimestamp = null;
+    let timerInterval = null;
+    let currentAlertsSignature = ''; // For checking if alerts changed
 
     const fetchApprovedLocations = async () => {
         try {
@@ -57,8 +63,96 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Format time mm:ss
+    const formatTime = (seconds) => {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
+    const updateTimer = () => {
+        if (!lastAlertTimestamp) {
+            timerContainer.style.display = 'none';
+            if (timerInterval) clearInterval(timerInterval);
+            return;
+        }
+
+        const now = new Date();
+        const alertTime = new Date(lastAlertTimestamp);
+        const diffSeconds = Math.floor((now - alertTime) / 1000);
+
+        if (diffSeconds < 0) {
+            // Future alert? Should not happen usually, but treat as 0
+             timerContainer.innerHTML = `<div class="timer-box">Time passed: 00:00</div>`;
+             return;
+        }
+
+        timerContainer.style.display = 'block';
+        
+        if (diffSeconds >= 600) { // 10 minutes
+            timerContainer.innerHTML = `<div class="timer-box safe">Safe to exit (10 mins passed)</div>`;
+        } else {
+             timerContainer.innerHTML = `<div class="timer-box warning">Time passed: ${formatTime(diffSeconds)}</div>`;
+        }
+    };
+
+    // Check if alerts have changed to avoid unnecessary re-renders
+    const hasAlertsChanged = (newAlerts) => {
+        const newSignature = JSON.stringify(newAlerts);
+        if (newSignature === currentAlertsSignature) {
+            return false;
+        }
+        currentAlertsSignature = newSignature;
+        return true;
+    };
+
     // Display the latest alert at the top (styled as before), and the rest as history
     const displayAlerts = (alerts) => {
+        // Handle Timer Logic based on the latest ACTIVE alert
+        const activeAlert = alerts.find(a => a.status === 'active');
+        
+        if (activeAlert) {
+            const activeTime = activeAlert.alertDate; // Assuming ISO string
+            // If it's a new active alert (different timestamp), or we just started tracking
+            if (activeTime !== lastAlertTimestamp) {
+                lastAlertTimestamp = activeTime;
+                // Restart timer interval if not running
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(updateTimer, 1000);
+            }
+             updateTimer(); // Immediate update
+        } else {
+            // No active alerts
+            if (lastAlertTimestamp) {
+                // If we were tracking an alert, but now it's gone or ended...
+                // Option A: Keep timer until user clears it? 
+                // Option B: Clear timer immediately.
+                // The requirement says: "When a new alert (active/recent) is detected: Start/Reset a timer."
+                // And "After 10 minutes, display a 'Safe to exit'".
+                // If the alert status changes to 'ended', we might still want to show the timer if < 10 mins?
+                // However, usually 'active' means it just happened.
+                
+                // Let's keep the timer running if we have a timestamp, until it hits 10 mins or is manually cleared?
+                // For now, if no active alert is returned in the list, we might assume the event is over.
+                // But the 'history' might still contain it.
+                // Let's look at the first alert in the list.
+            }
+             // If the top alert is not active (e.g. ended), we might still want to show "Safe to exit" if it was recent.
+             const topAlert = alerts[0];
+             if (topAlert && (new Date() - new Date(topAlert.alertDate) < 600000 + 5000)) { // 10m + buffer
+                 if (topAlert.alertDate !== lastAlertTimestamp) {
+                     lastAlertTimestamp = topAlert.alertDate;
+                     if (timerInterval) clearInterval(timerInterval);
+                     timerInterval = setInterval(updateTimer, 1000);
+                 }
+                 updateTimer();
+             } else {
+                 lastAlertTimestamp = null;
+                 if (timerInterval) clearInterval(timerInterval);
+                 timerContainer.style.display = 'none';
+             }
+        }
+
         alertsContainer.innerHTML = '';
         if (alerts && alerts.length > 0) {
             const alert = alerts[0]; // Show only the most recent alert
@@ -91,7 +185,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const timeElement = document.createElement('div');
             timeElement.className = 'alert-time';
-            timeElement.textContent = new Date(alert.alertDate).toLocaleString();
+            
+            // Format time to exactly HH:MM as shown in the screenshots
+            console.log(`[DEBUG] Received alertDate: ${alert.alertDate}`); // Add logging
+            const dateObj = new Date(alert.alertDate);
+            console.log(`[DEBUG] Parsed dateObj: ${dateObj.toString()}`); // Add logging
+            
+            // Format in Israel time
+            const timeString = dateObj.toLocaleTimeString('en-US', { 
+                timeZone: 'Asia/Jerusalem', 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            timeElement.textContent = timeString;
+            
             alertElement.appendChild(timeElement);
 
             alertsContainer.appendChild(alertElement);
@@ -133,7 +241,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyElement.appendChild(detailsElement);
                 const timeElement = document.createElement('div');
                 timeElement.className = 'history-time';
-                timeElement.textContent = new Date(alert.alertDate).toLocaleString();
+                
+                // Format time to exactly HH:MM as shown in the screenshots
+                const dateObj = new Date(alert.alertDate);
+                const timeString = dateObj.toLocaleTimeString('en-US', { 
+                    timeZone: 'Asia/Jerusalem', 
+                    hour12: false, 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                timeElement.textContent = timeString;
+                
                 historyElement.appendChild(timeElement);
                 historyContainer.appendChild(historyElement);
             }
@@ -164,11 +282,23 @@ document.addEventListener('DOMContentLoaded', () => {
             saveLastLocation(userLocation);
             const fetchAndRender = async () => {
                 const allAlerts = await fetchAllAlerts();
-                displayAlerts(allAlerts);
-                displayHistory(allAlerts);
+                if (hasAlertsChanged(allAlerts)) {
+                    displayAlerts(allAlerts);
+                    displayHistory(allAlerts);
+                } else {
+                    // Even if alerts didn't change, we might need to update the timer? 
+                    // The timer runs on its own setInterval (timerInterval), so we don't need to do it here.
+                    // However, we need to ensure the timer logic is checked if we start with existing alerts.
+                    // Actually, displayAlerts sets up the timer. If we don't call displayAlerts, we might miss setting up the timer on initial load?
+                    // But hasAlertsChanged will be true on first load (currentAlertsSignature is empty).
+                    
+                    // One edge case: if we refresh the page, we fetch alerts. hasAlertsChanged = true. displayAlerts is called. Timer starts.
+                    // Next fetch: alerts same. hasAlertsChanged = false. displayAlerts NOT called.
+                    // But timerInterval is already running from the first call. So we are good.
+                }
             };
             fetchAndRender();
-            fetchInterval = setInterval(fetchAndRender, 5000);
+            fetchInterval = setInterval(fetchAndRender, 2000);
         } else {
             alertsContainer.innerHTML = '<div class="alert-loading">Please enter a location.</div>';
         }

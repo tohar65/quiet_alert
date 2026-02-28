@@ -1,0 +1,44 @@
+{
+    "alerts": [
+        {
+            "id": "1",
+            "title": "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו",
+            "location": "פתח תקווה",
+            "alertDate": "2026-02-28T17:35:41",
+            "category": "instruction",
+            "status": "ended"
+        },
+        {
+            "id": "2",
+            "title": "ירי רקטות וטילים",
+            "location": "פתח תקווה",
+            "alertDate": "2026-02-28T17:25:34",
+            "category": "missiles",
+            "status": "ended"
+        },
+        {
+            "id": "3",
+            "title": "בדקות הקרובות צפויות להתקבל התרעות באזורך",
+            "location": "פתח תקווה",
+            "alertDate": "2026-02-28T17:18:17",
+            "category": "test",
+            "status": "ended"
+        },
+        {
+            "id": "4",
+            "title": "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו",
+            "location": "פתח תקווה",
+            "alertDate": "2026-02-28T17:05:01",
+            "category": "instruction",
+            "status": "ended"
+        },
+        {
+            "id": "5",
+            "title": "ירי רקטות וטילים",
+            "location": "פתח תקווה",
+            "alertDate": "2026-02-28T16:45:13",
+            "category": "missiles",
+            "status": "ended"
+        }
+    ]
+}

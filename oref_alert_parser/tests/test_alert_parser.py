@@ -194,14 +194,20 @@ def test_fetch_alerts_success(mock_get, mock_alerts_list_raw):
     """Test successfully fetching alerts from the API."""
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = mock_alerts_list_raw
+    # Mock raw.read() to return bytes of the JSON
+    json_bytes = json.dumps(mock_alerts_list_raw).encode('utf-8')
+    mock_response.raw.read.return_value = json_bytes
+    # Mock headers for Content-Encoding check
+    mock_response.headers = {}
     mock_get.return_value = mock_response
     
     data = fetch_alerts()
     
+    # Verify the URL matches the updated one
     mock_get.assert_called_once_with(
-        "https://www.oref.org.il/WarningMessages/alert/History/AlertsHistory.json",
-        headers=unittest.mock.ANY
+        "https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json",
+        headers=unittest.mock.ANY,
+        stream=True
     )
     assert data == mock_alerts_list_raw
 
@@ -212,7 +218,7 @@ def test_fetch_alerts_failure(mock_get):
     
     data = fetch_alerts()
     
-    assert data is None
+    assert data == []
 
 @patch('oref_alert_parser.parser.fetch_alerts')
 @patch('oref_alert_parser.parser.OrefAlertParser')
