@@ -49,6 +49,8 @@ class OrefAlertParser:
         if oref_category is None and "cat" in alert:
             try:
                 oref_category = int(alert["cat"])
+                status = CATEGORY_TO_STATUS.get(oref_category)
+                threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
             except ValueError:
                 pass
             
