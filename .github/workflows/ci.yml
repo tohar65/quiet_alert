@@ -44,7 +44,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ./oref_alert_parser
           pip install -r web_app/requirements.txt
-          pip install pytest pytest-cov
+          pip install -r requirements-test.txt
       - name: Run Core Parser Tests
         run: pytest oref_alert_parser/tests
       - name: Run Web Server Unit Tests
