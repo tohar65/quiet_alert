@@ -1,0 +1,4 @@
+@echo off
+echo Starting Quiet Alert App...
+python run_app.py
+pause
