@@ -1,21 +1,35 @@
 # Quiet Alert Architecture
 
 ## Overview
-Quiet Alert is a real-time Israeli alert monitoring system that provides location-specific siren history and live updates. It uses a hybrid polling mechanism to balance speed (1-second real-time checks) with completeness (full history synchronization).
+Quiet Alert is a real-time Israeli alert monitoring system that provides location-specific siren history and live updates. It uses a hybrid polling mechanism to balance speed (1-2 second real-time checks) with completeness (full history synchronization).
 
-## Data Sources & Fetching Strategy
-The system utilizes two primary OREF (Home Front Command) endpoints:
+## System Components
 
-1.  **Real-time (`Alerts.json`)**: Polled every 1 second. This provides instantaneous notification of active sirens but only contains the most recent few records.
-2.  **Full History (`GetAlarmsHistory.aspx`)**: Polled every 10 seconds. This provides a complete historical record (3,000+ items).
+### 1. Alert Parser Core (`oref_alert_parser`)
+The core parsing logic is decoupled from the web application into a standalone Python package. This package follows a provider-based architecture.
 
-### Backend Implementation (`web_app/web_server.py`)
--   **Background Polling**: A dedicated thread manages both polling cycles independently.
--   **Multi-Level Cache**:
-    -   `realtime_alerts_cache`: Stores up to 1,000 recent alerts, merged from both sources.
-    -   `history_cache`: Stores the full synchronized history.
--   **Deduplication**: Alerts are uniquely identified by a combination of `(alertDate, location, threat_type)` to ensure a clean feed even when merging overlapping data sources.
--   **Timezone Handling**: All OREF timestamps are explicitly tagged with the `Asia/Jerusalem` timezone to prevent browser-side drift or "future time" errors.
+*   **`AlertProvider` (Base Class)**: Defines the contract for fetching and parsing alerts.
+*   **`OrefProvider`**: Implements the `AlertProvider` interface specifically for the Home Front Command (Oref) APIs.
+*   **`OrefAlertParser`**: Orchestrates the fetching process using the configured provider.
+
+### 2. Web Server (`web_app`)
+The web server is a Flask-based application that manages the lifecycle of alert monitoring.
+
+*   **Background Polling**: A background thread manages the polling cycles for both real-time and historical data.
+*   **Multi-Level Cache**:
+    *   `realtime_alerts_cache`: Stores up to 1,000 recent alerts, merged from both sources.
+    *   `history_cache`: Stores the full synchronized history.
+*   **Deduplication**: Alerts are uniquely identified by a combination of `(alertDate, location, threat_type)` to ensure a clean feed even when merging overlapping data sources.
+*   **Timezone Handling**: All timestamps are explicitly tagged with the `Asia/Jerusalem` timezone.
+
+### 3. Configuration Management
+The system uses a centralized configuration system in `web_app/config.py`. All sensitive or environment-specific values can be overridden using environment variables.
+
+## Data Flow
+1.  **Polling Thread**: Every $N$ seconds, the background thread calls `OrefAlertParser.fetch_latest_alerts()` and `fetch_history()`.
+2.  **Provider Fetching**: The `OrefProvider` makes HTTP requests to the Oref APIs using configured headers and URLs.
+3.  **Parsing & Deduplication**: Raw JSON data is parsed into `Alert` objects. The web server then merges these into the cache, discarding duplicates.
+4.  **Frontend Updates**: The browser client polls the Flask `/api/alerts` endpoint.
 
 ## Frontend Design & UX
 The web application is designed for high visibility and passive monitoring.
@@ -31,11 +45,11 @@ The web application is designed for high visibility and passive monitoring.
         -   **10m+ (Actual Alert)**: Turns **Green** with "(Safe to exit)".
         -   **10m+ (Upcoming Alert)**: Turns **Red** with "(Warning: Long delay)".
     -   **Auto-Hide**: The timer is automatically hidden for "Safe to leave" (ניתן לצאת) alerts.
--   **Aurora Sync Button**: A "Check Alerts" button with a custom cubic-bezier "slapping" beam animation. It provides visual feedback during manual force-refreshes.
--   **Passive Live Sync Indicator**: A small, pulsing green dot that turns red if the backend connection is lost, providing non-intrusive status updates.
+-   **Aurora Sync Button**: A "Check Alerts" button with a custom cubic-bezier "slapping" beam animation.
+-   **Passive Live Sync Indicator**: A small, pulsing green dot that turns red if the backend connection is lost.
 
 ## Technical Stack
--   **Backend**: Flask (Python) with `threading` for asynchronous polling.
+-   **Backend**: Flask (Python) with `threading`.
 -   **Frontend**: Vanilla JavaScript, CSS3 Keyframe Animations.
--   **Parser**: Custom `OrefAlertParser` (distributed as a local package) for robust JSON/Array handling.
--   **Validation**: Playwright-based visual regression testing.
+-   **Core Parser**: Custom Python package with `requests` and `setuptools`.
+-   **Testing**: Pytest (Unit/Integration), Playwright (E2E/Visual).
