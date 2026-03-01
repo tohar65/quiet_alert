@@ -90,7 +90,7 @@ We use GitHub Actions to automate our testing and quality assurance processes. E
 ### Branch Protection & Enforcement
 
 To maintain a high standard of code:
-*   **Direct pushes to `main` and `dev` are discouraged** (and should be restricted via GitHub settings).
+*   **Direct pushes to `main` and `dev` are strictly forbidden**. Feature branches must always be used.
 *   **Pull Requests are required** for all changes.
 *   **Status Checks**: The CI pipeline must pass successfully before a PR can be merged into `dev`.
 *   **Reviews**: At least one code review is recommended for PRs targeting `main`.
