@@ -3,3 +3,4 @@ pytest-playwright
 flake8
 bandit
 pytest-cov
+uvicorn
