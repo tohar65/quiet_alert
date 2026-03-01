@@ -56,8 +56,10 @@ def test_refresh_button_animation(page: Page, test_server):
     # Initially should NOT have aurora class
     expect(refresh_btn).not_to_have_class(re.compile(r"loading-aurora"))
     
-    # Need to enter a location first or mock it
-    # For this test, let's just trigger the click if it's enabled or mock the enabling
+    # Enter a location
+    page.locator("#location-input").fill("פתח תקווה")
+    
+    # Force enable button to bypass any datalist sync issues in CI
     page.evaluate("() => { document.getElementById('check-alerts-btn').disabled = false; }")
 
     # Click it (use no_wait_after=True because it might be slow)

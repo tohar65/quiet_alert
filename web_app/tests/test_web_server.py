@@ -27,7 +27,10 @@ def test_get_alerts(client, mocker):
     }
     
     parser = OrefAlertParser([test_alert])
-    mocker.patch('web_app.web_server.realtime_alerts_cache', parser.get_alerts())
+    from web_app.web_server import realtime_alerts_cache, cache_lock
+    with cache_lock:
+        realtime_alerts_cache.clear()
+        realtime_alerts_cache.extend(parser.get_alerts())
 
     # Act
     response = client.get('/alerts')

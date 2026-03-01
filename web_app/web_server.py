@@ -42,7 +42,7 @@ def poll_realtime_alerts():
                     if len(realtime_alerts_cache) > 1000:
                         from datetime import datetime as dt, timezone
                         realtime_alerts_cache.sort(key=lambda a: a.alertDate if a.alertDate else dt.min.replace(tzinfo=timezone.utc), reverse=True)
-                        realtime_alerts_cache = realtime_alerts_cache[:1000]
+                        del realtime_alerts_cache[1000:]
 
             # Poll History every 10 seconds or if never fetched
             if time.time() - last_history_fetch > 10:
@@ -51,7 +51,7 @@ def poll_realtime_alerts():
                     history_parser = OrefAlertParser(history_data)
                     new_history = history_parser.get_alerts()
                     with cache_lock:
-                        history_cache = new_history
+                        history_cache[:] = new_history
                     last_history_fetch = time.time()
 
         except Exception as e:
