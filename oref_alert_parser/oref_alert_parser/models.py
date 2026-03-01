@@ -17,6 +17,7 @@ class ThreatType(Enum):
 CATEGORY_TO_STATUS: Dict[int, AlertStatus] = {
     1: AlertStatus.ACTIVE,
     2: AlertStatus.ACTIVE,
+    5: AlertStatus.ACTIVE,
     13: AlertStatus.ENDED,
     14: AlertStatus.UPCOMING
 }
@@ -24,6 +25,7 @@ CATEGORY_TO_STATUS: Dict[int, AlertStatus] = {
 CATEGORY_TO_THREAT_TYPE: Dict[int, ThreatType] = {
     1: ThreatType.ROCKET,
     2: ThreatType.AIRCRAFT_INTRUSION,
+    5: ThreatType.AIRCRAFT_INTRUSION,
 }
 
 THREAT_PATTERNS: Dict[ThreatType, re.Pattern] = {
@@ -53,7 +55,8 @@ class Alert:
         oref_category: Optional[int], 
         status: Optional[AlertStatus], 
         threat_type: Optional[ThreatType], 
-        message: Optional[str] = None
+        message: Optional[str] = None,
+        id: Optional[str] = None
     ):
         """Initializes an Alert object."""
         self.alertDate = alertDate
@@ -63,6 +66,7 @@ class Alert:
         self.status = status
         self.threat_type = threat_type
         self.message = message
+        self.id = id
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -78,5 +82,6 @@ class Alert:
             "oref_category": self.oref_category,
             "status": self.status.value if self.status else None,
             "threat_type": self.threat_type.value if self.threat_type else None,
-            "message": self.message
+            "message": self.message,
+            "id": self.id
         }

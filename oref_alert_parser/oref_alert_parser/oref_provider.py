@@ -59,15 +59,20 @@ class OrefProvider(AlertProvider):
             # print(f"Error fetching real-time data: {e}")
             return []
 
-    def fetch_history_alerts(self) -> List[Alert]:
+    def fetch_history_alerts(self, location: Optional[str] = None) -> List[Alert]:
         """
         Fetches historical alert data from Oref API.
         """
         headers = self.headers.copy()
         headers['Referer'] = 'https://www.oref.org.il/heb/alerts-history'
         
+        url = self.history_url
+        if location:
+            # Format for city-specific history
+            url = f"https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1&city_0={location}"
+
         try:
-            response = requests.get(self.history_url, headers=headers, stream=True, timeout=10)
+            response = requests.get(url, headers=headers, stream=True, timeout=10)
             response.raise_for_status()
 
             raw_content = response.raw.read()

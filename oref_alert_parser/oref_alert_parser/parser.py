@@ -73,10 +73,21 @@ class OrefAlertParser:
         threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category) if oref_category is not None else None
 
         raw_date = alert.get("alertDate")
+        alert_id = str(alert.get("id", "")) if alert.get("id") else None
         
-        # Real-time alerts might not have `alertDate`, so default to current UTC time if missing
-        if raw_date is None and "id" in alert:
-            raw_date = datetime.now(timezone.utc)
+        # Real-time alerts might not have `alertDate`, so try to use `id` or default to current UTC time
+        if raw_date is None:
+            if alert_id and alert_id.isdigit() and len(alert_id) >= 10:
+                # Likely a timestamp (seconds or milliseconds)
+                try:
+                    ts = int(alert_id)
+                    if len(alert_id) >= 13:
+                        ts = ts / 1000.0
+                    raw_date = datetime.fromtimestamp(ts, timezone.utc)
+                except (ValueError, OSError):
+                    raw_date = datetime.now(timezone.utc)
+            elif "id" in alert:
+                raw_date = datetime.now(timezone.utc)
             
         alert_date_obj = None
         if isinstance(raw_date, str):
@@ -121,7 +132,8 @@ class OrefAlertParser:
             oref_category=oref_category,
             status=status,
             threat_type=threat_type,
-            message=alert.get("category_desc")
+            message=alert.get("category_desc"),
+            id=alert_id
         )
 
     def _categorize_alerts(self) -> List[Alert]:
@@ -137,15 +149,24 @@ class OrefAlertParser:
         """
         Removes duplicate alerts.
 
-        Duplicates are identified based on location, threat_type, status, title,
-        category, and alertDate (rounded to the minute).
+        Duplicates are identified based on:
+        1. ID (if available)
+        2. Location + Threat Type + Status + Title + alertDate (rounded to minute)
 
         Returns:
             A list of unique Alert objects.
         """
-        seen = set()
+        seen_ids = set()
+        seen_keys = set()
         unique_alerts = []
         for alert in self.alerts:
+            # Priority 1: Use unique ID if present
+            if alert.id:
+                if alert.id in seen_ids:
+                    continue
+                seen_ids.add(alert.id)
+            
+            # Priority 2: Use content-based key
             loc_key = tuple(alert.location) if isinstance(alert.location, list) else alert.location
             key = (
                 loc_key,
@@ -155,8 +176,8 @@ class OrefAlertParser:
                 str(alert.oref_category),
                 str(alert.alertDate)[:16]  # e.g., up to minute
             )
-            if key not in seen:
-                seen.add(key)
+            if key not in seen_keys:
+                seen_keys.add(key)
                 unique_alerts.append(alert)
         return unique_alerts
 

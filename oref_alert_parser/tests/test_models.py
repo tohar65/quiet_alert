@@ -20,7 +20,8 @@ def test_alert_to_dict():
         oref_category=1,
         status=AlertStatus.ACTIVE,
         threat_type=ThreatType.ROCKET,
-        message="Test Message"
+        message="Test Message",
+        id="12345"
     )
     expected = {
         "alertDate": "2023-10-07T06:30:00+00:00",
@@ -29,7 +30,8 @@ def test_alert_to_dict():
         "oref_category": 1,
         "status": "active",
         "threat_type": "rocket",
-        "message": "Test Message"
+        "message": "Test Message",
+        "id": "12345"
     }
     assert alert.to_dict() == expected
 
@@ -41,7 +43,8 @@ def test_alert_to_dict_none_values():
         oref_category=None,
         status=None,
         threat_type=None,
-        message=None
+        message=None,
+        id=None
     )
     expected = {
         "alertDate": None,
@@ -50,6 +53,7 @@ def test_alert_to_dict_none_values():
         "oref_category": None,
         "status": None,
         "threat_type": None,
-        "message": None
+        "message": None,
+        "id": None
     }
     assert alert.to_dict() == expected

@@ -26,19 +26,12 @@ document:addEventListener('DOMContentLoaded', () => {
 
     const updateSyncStatusDisplay = () => {
         if (!syncStatusText) return;
-
-        if (liveSyncIndicator.classList.contains('error')) {
-            syncStatusText.textContent = 'Offline';
-            return;
-        }
-
-        if (liveSyncIndicator.classList.contains('syncing')) {
-            syncStatusText.textContent = 'Updating...';
-            return;
-        }
+        window.displayAlerts = displayAlerts;
+        window.displayHistory = displayHistory;
+        window.updateTimer = updateTimer;
 
         if (!lastSuccessfulSync) {
-            syncStatusText.textContent = 'Live';
+            syncStatusText.textContent = 'Last update: --';
             return;
         }
 
@@ -53,11 +46,7 @@ document:addEventListener('DOMContentLoaded', () => {
             liveSyncIndicator.classList.add('active');
         }
 
-        if (diffSeconds < 1) {
-            syncStatusText.textContent = 'Live: Just now';
-        } else {
-            syncStatusText.textContent = `Live: ${diffSeconds}s ago`;
-        }
+        syncStatusText.textContent = `Last update: ${diffSeconds}s ago`;
     };
 
     // Start status update interval
@@ -171,27 +160,31 @@ document:addEventListener('DOMContentLoaded', () => {
         const timeStr = formatTime(diffSeconds);
         
         let timerClass = 'timer-box';
-        let statusText = '';
         
         if (lastAlertStatus === 'upcoming') {
             if (diffSeconds >= 600) {
+                // Case: Upcoming + Long delay -> Red
                 timerClass += ' timer-danger';
-                statusText = ' (Warning: Long delay)';
             } else {
-                timerClass += ' warning';
-                statusText = ' (Alert may sound any moment)';
+                // Case: Upcoming + Alert may sound -> Yellow
+                timerClass += ' timer-warning';
             }
         } else {
-            // "Actual" alert (status is 'active' or other, but we assume active if not upcoming)
+            // Actual alert
             if (diffSeconds >= 600) {
-                timerClass += ' safe timer-safe';
-                statusText = ' (Safe to exit)';
+                // Case: Actual + Safe to exit -> Green
+                timerClass += ' timer-safe';
             } else {
-                timerClass += ' warning';
+                // Case: Actual + Initial state -> White
+                timerClass += ' timer-active';
             }
         }
         
-        timerContainer.innerHTML = `<div class="${timerClass}">Time passed: ${timeStr}${statusText}</div>`;
+        timerContainer.innerHTML = `
+            <div class="${timerClass}">
+                <div class="timer-label">Time passed:</div>
+                <div class="timer-value">${timeStr}</div>
+            </div>`;
     };
 
     // Check if alerts have changed to avoid unnecessary re-renders
@@ -206,12 +199,26 @@ document:addEventListener('DOMContentLoaded', () => {
 
     // Display the latest alert at the top (styled as before), and the rest as history
     const displayAlerts = (alerts, syncing = false) => {
+        window.displayAlerts = displayAlerts;
+        window.displayHistory = displayHistory;
+        window.updateTimer = updateTimer;
+        let deduplicatedAlerts = deduplicateAlerts(alerts);
+
+        // Filter for "Today only" (since 00:00 local time)
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        
+        deduplicatedAlerts = deduplicatedAlerts.filter(alert => {
+            const alertTime = new Date(alert.alertDate).getTime();
+            return alertTime >= todayStart;
+        });
+
         // Timer Logic: Always use the latest alert for the active location
-        if (alerts && alerts.length > 0) {
-            const latestAlertTime = alerts[0].alertDate;
-            const latestStatus = alerts[0].status;
-            const latestMessage = alerts[0].message;
-            const latestTitle = alerts[0].title;
+        if (deduplicatedAlerts && deduplicatedAlerts.length > 0) {
+            const latestAlertTime = deduplicatedAlerts[0].alertDate;
+            const latestStatus = deduplicatedAlerts[0].status;
+            const latestMessage = deduplicatedAlerts[0].message;
+            const latestTitle = deduplicatedAlerts[0].title;
             
             if (latestAlertTime !== lastAlertTimestamp || 
                 latestStatus !== lastAlertStatus || 
@@ -235,26 +242,19 @@ document:addEventListener('DOMContentLoaded', () => {
         }
 
         // Regression Fix: Don't show loading message if we already have alerts to show
-        if (syncing && alerts.length === 0) {
+        if (syncing && deduplicatedAlerts.length === 0) {
             alertsContainer.innerHTML = '<div class="alert-item alert-loading">Syncing data...</div>';
             return;
         }
 
         alertsContainer.innerHTML = '';
-        if (alerts && alerts.length > 0) {
-            const alert = alerts[0]; // Show only the most recent alert
+        if (deduplicatedAlerts && deduplicatedAlerts.length > 0) {
+            const alert = deduplicatedAlerts[0]; // Show only the most recent alert
             const alertElement = document.createElement('div');
             alertElement.className = 'alert-item alert-entry-animate'; // Added entry animation
             
-            // Handle statuses
-            if (alert.status === 'active') {
-                alertElement.classList.add('active');
-            } else if (alert.status === 'upcoming') {
-                alertElement.classList.add('alert-upcoming');
-            } else {
-                // Default to calm if no status or ended
-                alertElement.classList.add('alert-calm');
-            }
+            // Handle color-coding
+            alertElement.classList.add(getAlertColorClass(alert));
 
             const locationElement = document.createElement('div');
             locationElement.className = 'alert-location';
@@ -293,7 +293,7 @@ document:addEventListener('DOMContentLoaded', () => {
             alertsContainer.appendChild(alertElement);
         } else {
             const calmElement = document.createElement('div');
-            calmElement.className = 'alert-item alert-calm alert-entry-animate';
+            calmElement.className = 'alert-item alert-green alert-entry-animate';
             calmElement.textContent = 'All Quiet';
             alertsContainer.appendChild(calmElement);
         }
@@ -301,18 +301,45 @@ document:addEventListener('DOMContentLoaded', () => {
 
     // Display the rest of the alerts as history (excluding the latest)
     const displayHistory = (alerts) => {
+        let deduplicatedAlerts = deduplicateAlerts(alerts);
+        
+        // Filter for "Today only" (since 00:00 local time)
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        
+        deduplicatedAlerts = deduplicatedAlerts.filter(alert => {
+            const alertTime = new Date(alert.alertDate).getTime();
+            return alertTime >= todayStart;
+        });
+
         const historyContainer = document.getElementById('history-container');
+        
+        // Removed hard historyLimit cap to show all available history for the location
+        
         historyContainer.innerHTML = '<h2>Alert History</h2>';
-        if (alerts && alerts.length > 1) {
-            for (let i = 1; i < alerts.length; i++) {
-                const alert = alerts[i];
+        if (deduplicatedAlerts && deduplicatedAlerts.length > 0) {
+            // Show all historical alerts after the first one
+            const alertsToShow = deduplicatedAlerts.slice(1);
+            
+            if (alertsToShow.length === 0) {
+                historyContainer.innerHTML += '<p>No past history for today.</p>';
+                return;
+            }
+
+            alertsToShow.forEach(alert => {
                 const historyElement = document.createElement('div');
                 historyElement.className = 'history-item';
-                if (alert.status === 'active') {
+                
+                // Color coding for history too
+                const colorClass = window.getAlertColorClass(alert);
+                if (colorClass === 'alert-red' || colorClass === 'active') {
                     historyElement.classList.add('active');
-                } else if (alert.status === 'upcoming') {
+                } else if (colorClass === 'alert-yellow' || colorClass === 'upcoming') {
                     historyElement.classList.add('upcoming');
+                } else if (colorClass === 'alert-green' || colorClass === 'alert-calm') {
+                    historyElement.classList.add('safe');
                 }
+                
                 const detailsElement = document.createElement('div');
                 detailsElement.className = 'history-details';
                 const threatElement = document.createElement('div');
@@ -340,10 +367,82 @@ document:addEventListener('DOMContentLoaded', () => {
                 
                 historyElement.appendChild(timeElement);
                 historyContainer.appendChild(historyElement);
-            }
+            });
         } else {
             historyContainer.innerHTML += '<p>No history available.</p>';
         }
+    };
+
+    window.deduplicateAlerts = (alerts) => {
+        if (!alerts || alerts.length === 0) return [];
+        
+        const deduplicated = [];
+        
+        alerts.forEach(alert => {
+            const isDuplicate = deduplicated.some(existing => {
+                // Priority 1: Exact ID match
+                if (alert.id && existing.id && alert.id === existing.id) {
+                    return true;
+                }
+                
+                // Priority 2: Content-based match
+                const alertTime = new Date(alert.alertDate).getTime();
+                const existingTime = new Date(existing.alertDate).getTime();
+                const timeDiff = Math.abs(existingTime - alertTime);
+                const sameLocation = existing.location === alert.location;
+                
+                // Flexible content match: same location and (exact match OR swapped title/message)
+                const contentMatch = (existing.title === alert.title && existing.message === alert.message) ||
+                                     (existing.title === alert.message && existing.message === alert.title);
+                
+                // Broaden window for "Upcoming" alerts (Category 14) which pulse frequently
+                const isUpcoming = alert.status === 'upcoming' || existing.status === 'upcoming' ||
+                                 alert.oref_category === 14 || existing.oref_category === 14;
+                
+                if (isUpcoming && sameLocation && contentMatch && timeDiff <= 300000) { // 5 minute window for upcoming
+                    return true;
+                }
+
+                // If same location and time is very close (within 1 min), and content is similar enough
+                // OR if it's the exact same content within 2 mins
+                return sameLocation && (
+                    (contentMatch && timeDiff <= 120000) || 
+                    (timeDiff <= 60000) // Same location, same minute -> likely duplicate for UI
+                );
+            });
+            
+            if (!isDuplicate) {
+                deduplicated.push(alert);
+            }
+        });
+        
+        return deduplicated;
+    };
+
+    window.getAlertColorClass = (alert) => {
+        const title = alert.title || '';
+        const message = alert.message || '';
+
+        // Rule 1: Safe to leave -> green
+        if (title.includes('ניתן לצאת מהמרחב המוגן') || message.includes('ניתן לצאת מהמרחב המוגן')) {
+            return 'alert-green';
+        }
+
+        // Rule 2: Upcoming -> yellow
+        // Check both status and oref_category 14 for robustness
+        if (alert.status === 'upcoming' || alert.oref_category === 14) {
+            return 'alert-yellow';
+        }
+
+        // Rule 3: Actual alert (Rockets/Aircraft) -> red
+        if (title.includes('ירי רקטות וטילים') || message.includes('ירי רקטות וטילים') ||
+            title.includes('כלי טיס עוין') || message.includes('כלי טיס עוין')) {
+            return 'alert-red';
+        }
+        
+        // Fallback logic
+        if (alert.status === 'active') return 'alert-red'; // Consistent with Rule 3
+        return 'alert-green'; // Default calm
     };
 
     // --- State memory for last location ---

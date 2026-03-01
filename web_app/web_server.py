@@ -51,17 +51,29 @@ def poll_realtime_alerts() -> None:
             if parsed_alerts:
                 with cache_lock:
                     # Merge new alerts with existing cache, avoiding duplicates
+                    # Build lookup maps for fast deduplication
+                    existing_ids = {a.id for a in realtime_alerts_cache if a.id}
                     existing_keys = {
-                        (a.alertDate, tuple(a.location) if isinstance(a.location, list) else a.location, a.threat_type) 
-                        for a in realtime_alerts_cache
+                        (str(a.alertDate)[:16] if a.alertDate else None, tuple(a.location) if isinstance(a.location, list) else a.location, a.threat_type) 
+                        for a in realtime_alerts_cache if not a.id
                     }
                     
                     for alert in parsed_alerts:
-                        loc_key = tuple(alert.location) if isinstance(alert.location, list) else alert.location
-                        key = (alert.alertDate, loc_key, alert.threat_type)
-                        if key not in existing_keys:
-                            realtime_alerts_cache.append(alert)
+                        # Priority 1: Check ID
+                        if alert.id:
+                            if alert.id in existing_ids:
+                                continue
+                            existing_ids.add(alert.id)
+                        else:
+                            # Priority 2: Check content-based key
+                            loc_key = tuple(alert.location) if isinstance(alert.location, list) else alert.location
+                            date_key = str(alert.alertDate)[:16] if alert.alertDate else None
+                            key = (date_key, loc_key, alert.threat_type)
+                            if key in existing_keys:
+                                continue
                             existing_keys.add(key)
+                        
+                        realtime_alerts_cache.append(alert)
                     
                     if len(realtime_alerts_cache) > 1000:
                         from datetime import datetime as dt, timezone
@@ -124,34 +136,44 @@ def all_alerts() -> Any:
     Provides all historical alerts for a specific location.
     """
     location = request.args.get('location')
-    if not location:
-        return jsonify({"error": "Location parameter is required"}), 400
     
-    # Use cached alerts for speed
-    with cache_lock:
-        realtime_alerts = list(realtime_alerts_cache)
-        history_alerts = list(history_cache)
-
-    # Combine all alerts
-    all_alerts_list = realtime_alerts + history_alerts
-
-    # Filter by location
-    location_alerts = []
-    for alert in all_alerts_list:
-        if isinstance(alert.location, list):
-            if location in alert.location:
-                location_alerts.append(alert)
-        elif alert.location == location:
-            location_alerts.append(alert)
-
+    # Fetch alerts from provider
+    provider = get_provider()
+    
+    if location:
+        # Fetch city-specific history
+        history_alerts = provider.fetch_history_alerts(location=location)
+        
+        # Filter cached real-time alerts by location
+        with cache_lock:
+            realtime_alerts = [a for a in realtime_alerts_cache if (isinstance(a.location, list) and location in a.location) or a.location == location]
+            
+        all_alerts_list = realtime_alerts + history_alerts
+        limit = 100
+    else:
+        # Fetch nationwide history
+        with cache_lock:
+            realtime_alerts = list(realtime_alerts_cache)
+            history_alerts = list(history_cache)
+        
+        all_alerts_list = realtime_alerts + history_alerts
+        limit = 3000
+    
     # Deduplicate
     unique_alerts = {}
-    for alert in location_alerts:
-        date_key = str(alert.alertDate)[:16] if alert.alertDate else None
-        key = (date_key, location, alert.threat_type)
+    for alert in all_alerts_list:
+        loc_key = location if location else (tuple(alert.location) if isinstance(alert.location, list) else alert.location)
+        
+        # Priority 1: Use unique ID if available
+        if alert.id:
+            key = (alert.id, loc_key)
+        else:
+            # Priority 2: Use content-based key
+            date_key = str(alert.alertDate)[:16] if alert.alertDate else None
+            key = (date_key, loc_key, alert.threat_type)
         
         if key not in unique_alerts:
-            if isinstance(alert.location, list):
+            if location and isinstance(alert.location, list):
                 import copy
                 alert_copy = copy.copy(alert)
                 alert_copy.location = location
@@ -163,9 +185,9 @@ def all_alerts() -> Any:
     from datetime import datetime as dt
     final_alerts = sorted(unique_alerts.values(), key=lambda x: x.alertDate if x.alertDate else dt.min, reverse=True)
 
-    # Return top 50
+    # Return with appropriate limit
     return jsonify({
-        "alerts": [alert.to_dict() for alert in final_alerts[:50]],
+        "alerts": [alert.to_dict() for alert in final_alerts[:limit]],
         "syncing": last_history_fetch == 0
     })
 

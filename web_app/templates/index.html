@@ -11,11 +11,11 @@
 </head>
 <body>
     <div class="container">
+        <h1>Quiet Alert Status</h1>
         <div class="header-container">
-            <h1>Quiet Alert Status</h1>
             <div id="live-sync-indicator" class="live-sync" title="System is active">
                 <span class="sync-icon">●</span>
-                <span id="sync-status-text" class="sync-status-text">Live</span>
+                <span id="sync-status-text" class="sync-status-text">Last update: --</span>
             </div>
         </div>
         <div class="location-setter">
@@ -25,8 +25,13 @@
         </div>
         <div id="alerts-container"></div>
         <div id="timer-container" style="display: none;"></div>
-        <div id="history-container"></div>
-    </div>
+    <div id="history-container"></div>
+    <script>
+        // App configuration
+        window.CONFIG = {
+            historyLimit: 10
+        };
+    </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

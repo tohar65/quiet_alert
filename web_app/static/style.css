@@ -8,7 +8,7 @@
     --primary-blue-dark: #0056b3;
     --success-green: #28a745;
     --error-red: #ff4d4d;
-    --warning-yellow: #ffd700;
+    --warning-yellow: #ffc400;
     --stale-orange: #fd7e14;
     --text-main: #e0e0e0;
     --text-muted: #888;
@@ -52,7 +52,7 @@ h1 {
 
 .header-container {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     margin-bottom: 2rem;
 }
@@ -267,25 +267,52 @@ h1 {
 .timer-box {
     margin-top: 2rem;
     margin-bottom: 2rem;
-    padding: 0.8rem;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 400;
+    padding: 1.5rem;
+    border-radius: 12px;
     transition: all 0.5s ease;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.02);
     color: var(--text-bright);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.timer-label {
+    font-size: 1rem;
+    opacity: 0.7;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.timer-value {
+    font-size: 4rem;
+    font-weight: 700;
+    font-family: 'Roboto Mono', monospace;
 }
 
 .timer-box.timer-safe {
-    color: #4ade80;
-    border-color: rgba(74, 222, 128, 0.2);
+    color: var(--success-green);
+    border-color: rgba(40, 167, 69, 0.2);
+}
+
+.timer-box.timer-warning {
+    color: var(--warning-yellow);
+    border-color: rgba(255, 255, 0, 0.3);
+    text-shadow: 0 0 10px rgba(255, 255, 0, 0.4);
 }
 
 .timer-box.timer-danger {
-    color: #f87171;
-    border-color: rgba(248, 113, 113, 0.2);
+    color: var(--error-red);
+    border-color: rgba(255, 77, 77, 0.2);
     animation: subtle-shake 0.5s ease-in-out;
+}
+
+.timer-box.timer-active {
+    color: var(--text-bright);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 @keyframes subtle-shake {
@@ -339,7 +366,7 @@ h1 {
     border: 1px solid var(--success-green);
 }
 
-.alert-item.active {
+.alert-item.active, .alert-item.alert-red {
     color: var(--error-red);
     background-color: rgba(255, 77, 77, 0.1);
     border: 2px solid var(--error-red);
@@ -352,10 +379,17 @@ h1 {
     100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
 }
 
-.alert-upcoming {
+.alert-upcoming, .alert-item.alert-yellow {
     color: var(--warning-yellow);
-    background-color: rgba(255, 215, 0, 0.1);
-    border: 2px solid var(--warning-yellow);
+    background-color: rgba(255, 255, 0, 0.1);
+    border: 3px solid var(--warning-yellow); /* Increased border thickness */
+    box-shadow: 0 0 15px rgba(255, 255, 0, 0.2);
+}
+
+.alert-calm, .alert-item.alert-green {
+    color: var(--success-green);
+    background-color: rgba(40, 167, 69, 0.1);
+    border: 1px solid var(--success-green);
 }
 
 .alert-message {
@@ -394,6 +428,19 @@ h1 {
     justify-content: space-between;
     align-items: center;
     transition: all 0.3s ease;
+}
+
+.history-item.active {
+    border-left-color: var(--error-red);
+}
+
+.history-item.upcoming {
+    border-left-color: var(--warning-yellow);
+
+}
+
+.history-item.safe {
+    border-left-color: var(--success-green);
 }
 
 .history-item:hover {

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .models import Alert
 
 class AlertProvider(ABC):
@@ -19,9 +19,12 @@ class AlertProvider(ABC):
         pass
 
     @abstractmethod
-    def fetch_history_alerts(self) -> List[Alert]:
+    def fetch_history_alerts(self, location: Optional[str] = None) -> List[Alert]:
         """
         Fetches historical alert data and returns a list of parsed Alert objects.
+        
+        Args:
+            location: Optional city name to filter history for.
 
         Returns:
             A list of Alert objects.
