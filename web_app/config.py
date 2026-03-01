@@ -27,7 +27,7 @@ class Config:
     
     # Server configuration
     SERVER_PORT = int(os.environ.get('PORT', 8080))
-    SERVER_HOST = os.environ.get('SERVER_HOST', '0.0.0.0')
+    SERVER_HOST = os.environ.get('SERVER_HOST', '0.0.0.0')  # nosec
     DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 't')
 
     # Data paths

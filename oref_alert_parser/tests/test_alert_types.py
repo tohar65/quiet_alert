@@ -51,7 +51,8 @@ class TestAlertTypes(unittest.TestCase):
             "oref_category": 1,
             "status": "active",
             "threat_type": "rocket",
-            "message": None
+            "message": None,
+            "id": None
         }
         self.assertEqual(alert.to_dict(), expected_dict)
 
@@ -73,7 +74,8 @@ class TestAlertTypes(unittest.TestCase):
             "oref_category": 1,
             "status": None,
             "threat_type": None,
-            "message": None
+            "message": None,
+            "id": None
         }
         self.assertEqual(alert.to_dict(), expected_dict)
 

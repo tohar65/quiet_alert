@@ -106,6 +106,41 @@ pytest web_app/tests/test_web_server.py
 pytest web_app/tests/test_e2e_scenarios.py
 ```
 
+## Git Working Method
+
+The repository follows a structured branching strategy to ensure code quality and stability.
+
+### Branching Strategy
+
+- **`main`**: The production branch. Only contains stable, tested, and reviewed code.
+- **`dev`**: The integration branch. All features and bug fixes are merged here first for integration testing.
+- **`feature/*`**, **`fix/*`**, **`refactor/*`**: Short-lived branches for specific tasks. These branches **must** originate from `dev`.
+
+### Development Workflow
+
+1.  **Create a Branch**: Start from the latest `dev` branch.
+    ```bash
+    git checkout dev
+    git pull
+    git checkout -b feature/your-feature-name
+    ```
+2.  **Commit Changes**: Follow the project's [Coding Standards](docs/development.md#coding-standards).
+3.  **Run Local Tests**: Ensure all tests pass locally before pushing.
+    ```bash
+    pytest
+    ```
+4.  **Open a Pull Request**: When ready, open a Pull Request (PR) from your branch to `dev`.
+5.  **CI/CD Validation**: The GitHub Actions pipeline will automatically run linting and unit tests on your PR.
+6.  **Review and Merge**: Once the pipeline succeeds and the code is reviewed, it can be merged into `dev`.
+7.  **Branch Cleanup**: After a successful merge, the feature branch should be deleted.
+
+### CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration. The pipeline consists of:
+- **Lint Stage**: Code style checks using `flake8` and security analysis with `bandit`.
+- **Unit Test Stage**: Executes core parser and web server unit tests.
+- **E2E Test Stage**: Performs full end-to-end scenarios using Playwright (triggered on merges to `dev` and `main`).
+
 ## License
 
 This project is licensed under the MIT License.

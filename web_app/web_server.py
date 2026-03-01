@@ -1,10 +1,8 @@
-import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, jsonify, render_template, request
-from typing import List, Dict, Any, Tuple, Optional
-from oref_alert_parser.parser import OrefAlertParser
+from typing import List, Any, Optional
 from oref_alert_parser.approved_locations import APPROVED_LOCATIONS
 from oref_alert_parser.models import Alert
 from oref_alert_parser.provider import AlertProvider
@@ -76,8 +74,7 @@ def poll_realtime_alerts() -> None:
                         realtime_alerts_cache.append(alert)
                     
                     if len(realtime_alerts_cache) > 1000:
-                        from datetime import datetime as dt, timezone
-                        realtime_alerts_cache.sort(key=lambda a: a.alertDate if a.alertDate else dt.min.replace(tzinfo=timezone.utc), reverse=True)
+                        realtime_alerts_cache.sort(key=lambda a: a.alertDate if a.alertDate else datetime.min.replace(tzinfo=timezone.utc), reverse=True)
                         del realtime_alerts_cache[1000:]
 
             # Poll History based on configured interval or if never fetched

@@ -71,6 +71,30 @@ We follow a strict TDD approach. All new features and bug fixes must be accompan
 *   **E2E Tests**: `pytest web_app/tests/test_e2e_scenarios.py`
 *   **Coverage**: Run `pytest --cov=oref_alert_parser --cov=web_app` to check coverage.
 
+## Continuous Integration (CI/CD)
+
+We use GitHub Actions to automate our testing and quality assurance processes. Every commit and pull request to `dev` or `main` triggers the CI pipeline.
+
+### Pipeline Stages
+
+1.  **Linting**:
+    *   **Flake8**: Checks for PEP 8 compliance and common errors.
+    *   **Bandit**: Scans the codebase for common security issues.
+2.  **Unit & Integration Tests**:
+    *   Runs the `oref_alert_parser` test suite.
+    *   Runs `web_app` unit tests (server logic, data handling).
+3.  **End-to-End (E2E) Tests**:
+    *   Runs full browser-based scenarios using Playwright.
+    *   Triggered on Pull Requests to `dev`/`main` and on direct pushes to these branches.
+
+### Branch Protection & Enforcement
+
+To maintain a high standard of code:
+*   **Direct pushes to `main` and `dev` are discouraged** (and should be restricted via GitHub settings).
+*   **Pull Requests are required** for all changes.
+*   **Status Checks**: The CI pipeline must pass successfully before a PR can be merged into `dev`.
+*   **Reviews**: At least one code review is recommended for PRs targeting `main`.
+
 ## Project Structure
 *   `oref_alert_parser/`: The core logic for fetching and parsing alerts.
 *   `web_app/`: The Flask web server and frontend assets.
