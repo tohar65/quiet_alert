@@ -4,3 +4,4 @@ flake8
 bandit
 pytest-cov
 uvicorn
+pytest-mock

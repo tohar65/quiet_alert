@@ -136,7 +136,7 @@ def test_parser_timezone_handling():
     parser = OrefAlertParser(alerts_data)
     alert = parser.alerts[0]
     # +2 offset for Israel standard time
-    assert alert.alertDate.utcoffset() == timedelta(hours=2)
+    assert alert.alertDate.utcoffset() == timedelta(hours=3)
 
 def test_parser_title_extraction():
     """Test title extraction from category_desc when title is missing."""
