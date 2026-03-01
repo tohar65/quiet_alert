@@ -6,6 +6,12 @@ from web_app.web_server import app
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
+    # Clear caches for consistent testing
+    import web_app.web_server as ws
+    with ws.cache_lock:
+        ws.realtime_alerts_cache = []
+        ws.history_cache = []
+        ws.last_history_fetch = 0
     with app.test_client() as client:
         yield client
 
@@ -35,6 +41,11 @@ def test_api_alerts_consistency(client, mock_alerts_data):
         mock_realtime.return_value = []
         mock_history.return_value = mock_alerts_data
         
+        # Manually trigger a cache population since background thread is disabled in tests
+        import web_app.web_server as ws
+        from oref_alert_parser.parser import OrefAlertParser
+        ws.history_cache = OrefAlertParser(mock_alerts_data).get_alerts()
+        
         # Test for "פתח תקווה"
         response = client.get('/api/alerts/all?location=פתח תקווה')
         assert response.status_code == 200
@@ -56,8 +67,8 @@ def test_api_alerts_consistency(client, mock_alerts_data):
         assert first_alert["location"] == "פתח תקווה"
         assert "ניתן לצאת מהמרחב המוגן" in first_alert["title"]
         assert first_alert["status"] == "ended" # Category 13 maps to ENDED
-        # Note: the parser assumes the API payload is in UTC
-        assert first_alert["alertDate"] == "2023-10-07T10:10:00+00:00"
+        # Note: the parser assumes the API payload is in Israel time (Asia/Jerusalem)
+        assert first_alert["alertDate"] == "2023-10-07T10:10:00+02:00"
         
         # Verify second alert (Active/History Rocket)
         assert second_alert["location"] == "פתח תקווה"
@@ -65,5 +76,5 @@ def test_api_alerts_consistency(client, mock_alerts_data):
         # Category 1 maps to ACTIVE.
         assert second_alert["status"] == "active" 
         assert second_alert["threat_type"] == "rocket"
-        assert second_alert["alertDate"] == "2023-10-07T10:00:00+00:00"
+        assert second_alert["alertDate"] == "2023-10-07T10:00:00+02:00"
 

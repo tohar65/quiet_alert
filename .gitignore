@@ -1,6 +1,9 @@
 # Fetched data
 alerts.json
+nul
 
 # Python cache
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/

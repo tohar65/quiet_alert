@@ -51,18 +51,20 @@ def test_refresh_button_animation(page: Page, test_server):
 
     page.goto("http://127.0.0.1:5006/")
     
-    refresh_btn = page.locator("#refresh-btn")
+    refresh_btn = page.locator("#check-alerts-btn")
     
-    # Initially should NOT have spinning class
-    expect(refresh_btn).not_to_have_class(re.compile(r"spinning"))
+    # Initially should NOT have aurora class
+    expect(refresh_btn).not_to_have_class(re.compile(r"loading-aurora"))
     
+    # Need to enter a location first or mock it
+    # For this test, let's just trigger the click if it's enabled or mock the enabling
+    page.evaluate("() => { document.getElementById('check-alerts-btn').disabled = false; }")
+
     # Click it (use no_wait_after=True because it might be slow)
     refresh_btn.click(no_wait_after=True)
     
-    # Should have spinning class while request is in progress
-    # (Since we added 1s delay in handle_refresh)
-    expect(refresh_btn).to_have_class(re.compile(r"spinning"))
+    # Should have aurora class while request is in progress
+    expect(refresh_btn).to_have_class(re.compile(r"loading-aurora"))
     
-    # Wait for the spinning class to be removed (request finishes)
-    # We increase timeout just in case
-    expect(refresh_btn).not_to_have_class(re.compile(r"spinning"), timeout=10000)
+    # Wait for the aurora class to be removed
+    expect(refresh_btn).not_to_have_class(re.compile(r"loading-aurora"), timeout=10000)

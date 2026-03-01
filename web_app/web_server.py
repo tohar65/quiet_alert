@@ -59,10 +59,6 @@ def poll_realtime_alerts():
             
         time.sleep(2)
 
-# Start background polling thread
-polling_thread = threading.Thread(target=poll_realtime_alerts, daemon=True)
-polling_thread.start()
-
 
 @app.route('/')
 def index():
@@ -168,5 +164,9 @@ def all_alerts():
 
 
 if __name__ == '__main__':
+    # Start background polling thread
+    polling_thread = threading.Thread(target=poll_realtime_alerts, daemon=True)
+    polling_thread.start()
+
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=True)

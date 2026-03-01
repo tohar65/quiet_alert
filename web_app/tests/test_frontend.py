@@ -42,6 +42,13 @@ def test_server():
     # Mock the backend fetch_alerts to return raw Oref data
     with patch("web_app.web_server.fetch_alerts", return_value=RAW_OREF_DATA), \
          patch("web_app.web_server.fetch_realtime_alerts", return_value=[]):
+        
+        # Manually populate the cache since the background thread is not running
+        import web_app.web_server as ws
+        from oref_alert_parser.parser import OrefAlertParser
+        ws.history_cache = OrefAlertParser(RAW_OREF_DATA).get_alerts()
+        ws.last_history_fetch = 1 # Mark as fetched
+        
         server = ServerThread(app)
         server.start()
         yield
