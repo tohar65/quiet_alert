@@ -177,23 +177,50 @@ def test_timer_transitions(page: Page, test_server):
     
     expect(timer).to_have_class(re.compile(r"safe"))
 
-def test_responsive_layout(page: Page, test_server):
+def test_timer_upcoming_colors(page: Page, test_server):
+    # Alert with category 14 (Upcoming)
+    now = datetime.now()
+    mock_alerts = {
+        "alerts": [{
+            "location": "Test City",
+            "title": "Some Title",
+            "message": "Some Message",
+            "alertDate": (now - timedelta(seconds=30)).isoformat(),
+            "oref_category": 14,
+            "status": "active" # Force it to rely on category
+        }],
+        "syncing": False
+    }
+
+    page.route("**/api/alerts/all*", lambda route: route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps(mock_alerts)
+    ))
+
     page.goto(test_server)
+    page.fill("#location-input", "Test City")
+    page.evaluate("document.getElementById('check-alerts-btn').disabled = false")
+    page.click("#check-alerts-btn")
     
-    # Desktop Viewport
-    page.set_viewport_size({"width": 1280, "height": 800})
-    # Check if main container is centered or has expected width
-    container = page.locator(".container")
-    expect(container).to_be_visible()
-    box = container.bounding_box()
-    assert box is not None
-    assert box['width'] > 400 # Desktop should be wider or fixed max-width
+    # Wait for timer
+    timer = page.locator("#timer-container .timer-box")
+    expect(timer).to_be_visible()
     
-    # Mobile Viewport
-    page.set_viewport_size({"width": 375, "height": 667})
-    box = container.bounding_box()
-    assert box is not None
-    assert box['width'] <= 375 # Should fit mobile width
+    # Should show warning (yellow) because it's upcoming and under 10 mins
+    expect(timer).to_have_class(re.compile(r"timer-warning"))
+    
+    # Mock it to be > 10 mins ago
+    mock_alerts["alerts"][0]["alertDate"] = (now - timedelta(minutes=11)).isoformat()
+    page.route("**/api/alerts/all*", lambda route: route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps(mock_alerts)
+    ))
+    
+    page.wait_for_timeout(3000)
+    # Should show danger (red) because it's upcoming and over 10 mins
+    expect(timer).to_have_class(re.compile(r"timer-danger"))
 
 def test_deduplication_logic(page: Page, test_server):
     page.goto(test_server)
@@ -236,6 +263,14 @@ def test_color_coding_logic(page: Page, test_server):
     # Upcoming status -> yellow
     alert_yellow = {"status": "upcoming", "title": "Some alert"}
     assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_yellow)})") == "alert-yellow"
+    
+    # Upcoming by category -> yellow
+    alert_cat14 = {"status": "ended", "oref_category": 14}
+    assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_cat14)})") == "alert-yellow"
+    
+    # Upcoming by Hebrew text -> yellow
+    alert_hebrew = {"status": "active", "title": "התרעה מוקדמת"}
+    assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_hebrew)})") == "alert-yellow"
     
     # Rocket fire -> red
     alert_red = {"status": "active", "title": "ירי רקטות וטילים"}

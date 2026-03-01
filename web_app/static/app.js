@@ -215,10 +215,13 @@ document:addEventListener('DOMContentLoaded', () => {
 
         // Timer Logic: Always use the latest alert for the active location
         if (deduplicatedAlerts && deduplicatedAlerts.length > 0) {
-            const latestAlertTime = deduplicatedAlerts[0].alertDate;
-            const latestStatus = deduplicatedAlerts[0].status;
-            const latestMessage = deduplicatedAlerts[0].message;
-            const latestTitle = deduplicatedAlerts[0].title;
+            const latestAlert = deduplicatedAlerts[0];
+            const latestAlertTime = latestAlert.alertDate;
+            const latestStatus = (latestAlert.status === 'upcoming' || 
+                                 latestAlert.oref_category === 14 || 
+                                 (latestAlert.title && latestAlert.title.includes('התרעה מוקדמת'))) ? 'upcoming' : latestAlert.status;
+            const latestMessage = latestAlert.message;
+            const latestTitle = latestAlert.title;
             
             if (latestAlertTime !== lastAlertTimestamp || 
                 latestStatus !== lastAlertStatus || 
@@ -429,8 +432,9 @@ document:addEventListener('DOMContentLoaded', () => {
         }
 
         // Rule 2: Upcoming -> yellow
-        // Check both status and oref_category 14 for robustness
-        if (alert.status === 'upcoming' || alert.oref_category === 14) {
+        // Check both status and oref_category 14 for robustness, and common Hebrew keywords
+        if (alert.status === 'upcoming' || alert.oref_category === 14 || 
+            title.includes('התרעה מוקדמת') || message.includes('התרעה מוקדמת')) {
             return 'alert-yellow';
         }
 
