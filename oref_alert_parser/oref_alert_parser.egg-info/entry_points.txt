@@ -1,0 +1,3 @@
+[console_scripts]
+oref-alert-parser = oref_alert_parser.main:main
+update-locations = oref_alert_parser.locations_updater:main

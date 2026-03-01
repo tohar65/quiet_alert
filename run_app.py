@@ -17,8 +17,37 @@ def run_command(command: List[str], cwd: Optional[str] = None) -> int:
         print(f"Error running command {' '.join(command)}: {e}")
         return 1
 
+def install_dependencies():
+    """Installs all necessary dependencies."""
+    print("Installing dependencies...")
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    
+    # Install oref_alert_parser in editable mode
+    oref_parser_path = os.path.join(project_root, "oref_alert_parser")
+    print("Installing oref_alert_parser...")
+    if run_command([sys.executable, "-m", "pip", "install", "-e", oref_parser_path], cwd=project_root) != 0:
+        print("Failed to install oref_alert_parser.")
+        sys.exit(1)
+
+    # Install web_app requirements
+    web_app_reqs = os.path.join(project_root, "web_app", "requirements.txt")
+    print("Installing web_app requirements...")
+    if run_command([sys.executable, "-m", "pip", "install", "-r", web_app_reqs], cwd=project_root) != 0:
+        print("Failed to install web_app requirements.")
+        sys.exit(1)
+
+    # Install test requirements
+    test_reqs = os.path.join(project_root, "requirements-test.txt")
+    print("Installing test requirements...")
+    if run_command([sys.executable, "-m", "pip", "install", "-r", test_reqs], cwd=project_root) != 0:
+        print("Failed to install test requirements.")
+        sys.exit(1)
+
+    print("All dependencies installed successfully.")
+
 def serve():
     """Starts the Flask web server."""
+    install_dependencies()
     print("Starting Quiet Alert server...")
     
     # Set the working directory to the project root
@@ -111,7 +140,10 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Serve command
-    subparsers.add_parser("serve", help="Starts the Flask web server (default)")
+    subparsers.add_parser("serve", help="Installs dependencies and starts the Flask web server (default)")
+
+    # Install command
+    subparsers.add_parser("install", help="Installs all necessary dependencies")
 
     # Test command
     subparsers.add_parser("test", help="Runs the full pytest suite")
@@ -124,6 +156,8 @@ def main():
     # Default to serve if no command provided
     if args.command == "serve" or args.command is None:
         serve()
+    elif args.command == "install":
+        install_dependencies()
     elif args.command == "test":
         run_tests()
     elif args.command == "update-locations":

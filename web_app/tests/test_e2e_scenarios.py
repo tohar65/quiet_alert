@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime
 from flask import Flask, jsonify
+from unittest.mock import patch
 from playwright.sync_api import sync_playwright, expect
 from web_app.web_server import app as flask_app
 import oref_alert_parser.parser as parser
@@ -73,35 +74,31 @@ def test_e2e_nominal_path(server, browser):
         )
     ]
     
-    # Mock the backend caches directly for the test
-    import web_app.web_server as web_server
-    with web_server.cache_lock:
-        web_server.realtime_alerts_cache = mock_alerts
-        web_server.history_cache = mock_alerts
-        web_server.last_history_fetch = time.time()
-
-    # Navigate to the app
-    page.goto(BASE_URL)
-    
-    # Select location
-    location_input = page.locator("#location-input")
-    location_input.fill("תל אביב - מרכז ודרום")
-    
-    # Force enable button to bypass any datalist sync issues in CI
-    force_enable_button(page)
-    
-    check_btn = page.locator("#check-alerts-btn")
-    expect(check_btn).not_to_be_disabled()
-    check_btn.click()
-    
-    # Verify alert appears in UI
-    alert_item = page.locator(".alert-item.active")
-    expect(alert_item).to_be_visible(timeout=10000)
-    expect(alert_item.locator(".alert-location")).to_have_text("תל אביב - מרכז ודרום")
-    expect(alert_item.locator(".alert-threat")).to_have_text("ירי רקטות וטילים")
-    
-    # Verify history
-    expect(page.locator("#history-container")).to_contain_text("No history available.")
+    # Mock the fetch functions
+    with patch('web_app.web_server.fetch_realtime_alerts', return_value=mock_alerts), \
+         patch('web_app.web_server.fetch_alerts', return_value=mock_alerts):
+        # Navigate to the app
+        page.goto(BASE_URL)
+        
+        # Select location
+        location_input = page.locator("#location-input")
+        location_input.fill("תל אביב - מרכז ודרום")
+        
+        # Force enable button to bypass any datalist sync issues in CI
+        force_enable_button(page)
+        
+        check_btn = page.locator("#check-alerts-btn")
+        expect(check_btn).not_to_be_disabled()
+        check_btn.click()
+        
+        # Verify alert appears in UI
+        alert_item = page.locator(".alert-item.active")
+        expect(alert_item).to_be_visible(timeout=10000)
+        expect(alert_item.locator(".alert-location")).to_have_text("תל אביב - מרכז ודרום")
+        expect(alert_item.locator(".alert-threat")).to_have_text("ירי רקטות וטילים")
+        
+        # Verify history
+        expect(page.locator("#history-container")).to_contain_text("No history available.")
 
 def test_e2e_realtime_update(server, browser):
     """
