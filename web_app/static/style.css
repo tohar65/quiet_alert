@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Assistant&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&display=swap');
 
 body {
     font-family: 'Assistant', 'Roboto Mono', monospace;
@@ -28,7 +28,48 @@ h1 {
     margin-top: 0;
     color: #ffffff;
     font-size: 2.2rem;
+}
+
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 1.5rem;
+}
+
+.live-sync {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.4;
+    transition: all 0.5s ease;
+}
+
+.sync-icon {
+    font-size: 0.8rem;
+    color: #28a745;
+    animation: soft-beam 3s infinite ease-in-out;
+}
+
+.live-sync.syncing {
+    opacity: 0.8;
+}
+
+.live-sync.error .sync-icon {
+    color: #ff4d4d;
+    animation: broken-pulse 1s infinite steps(2);
+}
+
+@keyframes soft-beam {
+    0%, 100% { transform: scale(0.8); opacity: 0.5; filter: blur(1px); }
+    50% { transform: scale(1.2); opacity: 1; filter: blur(0px); text-shadow: 0 0 8px #28a745; }
+}
+
+@keyframes broken-pulse {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.2; transform: scale(0.9); }
 }
 
 .location-setter {
@@ -56,24 +97,89 @@ h1 {
     padding: 0.8rem 1.5rem;
     border: none;
     border-radius: 8px;
-    background-color: #007bff;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
     color: #fff;
     font-size: 1rem;
     font-weight: bold;
     cursor: pointer;
-    transition: background-color 0.3s, transform 0.2s;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
 }
 
 #check-alerts-btn:hover {
-    background-color: #0056b3;
+    background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%);
     transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+#check-alerts-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 #check-alerts-btn:disabled {
-    background-color: #333;
+    background: #333;
     color: #888;
     cursor: not-allowed;
     transform: none;
+    box-shadow: none;
+}
+
+/* Aurora Loading Effect */
+.loading-aurora {
+    pointer-events: none;
+    position: relative;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.6) !important; /* Lighter text during loading */
+}
+
+.loading-aurora::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0) 30%,
+        rgba(255, 255, 255, 0.4) 50%,
+        rgba(255, 255, 255, 0) 70%,
+        transparent 100%
+    );
+    animation: beam-sweep 1.2s infinite ease-in-out;
+}
+
+@keyframes beam-sweep {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+.loading-aurora {
+    animation: aurora-pulse 1.5s infinite ease-in-out !important;
+}
+
+@keyframes aurora-pulse {
+    0% {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+    }
+    50% {
+        background: linear-gradient(135deg, #0069d9 0%, #004a99 100%);
+        box-shadow: 0 0 20px rgba(0, 123, 255, 0.6);
+    }
+    100% {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+    }
 }
 
 #change-location-btn {
@@ -92,8 +198,50 @@ h1 {
     background: #222;
 }
 
+.timer-box {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem; /* Space between timer and history */
+    padding: 0.5rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 300;
+    transition: all 0.5s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.timer-box.warning {
+    background-color: transparent;
+    color: #ffffff;
+    border-color: rgba(255, 193, 7, 0.2);
+}
+
+.timer-box.safe::after {
+    content: "✓";
+    position: absolute;
+    right: 15px; /* Adjusted position */
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.1rem; /* Slightly larger */
+    opacity: 0.5; /* More visible */
+    color: #28a745;
+}
+
+.timer-box.timer-safe {
+    color: #4ade80;
+}
+
+.timer-box.timer-danger {
+    color: #f87171;
+}
+
+@keyframes success-glow {
+    from { box-shadow: 0 0 5px rgba(40, 167, 69, 0.2); }
+    to { box-shadow: 0 0 15px rgba(40, 167, 69, 0.5); }
+}
+
 #alerts-container {
-    margin-bottom: 2rem;
+    margin-bottom: 0.5rem; /* Reduced margin since timer-box now has margin-top */
     min-height: 120px;
     display: flex;
     justify-content: center;
@@ -113,6 +261,9 @@ h1 {
     gap: 0.5rem;
     text-shadow: 0 0 15px rgba(0, 0, 0, 0.5); /* Add a subtle shadow */
     font-family: 'Assistant', 'Roboto Mono', monospace;
+    color: #28a745; /* Default color for calm */
+    background-color: rgba(40, 167, 69, 0.1);
+    border: 1px solid #28a745;
 }
 
 .alert-item .alert-location {
@@ -176,7 +327,7 @@ h1 {
 }
 
 #history-container {
-    margin-top: 3rem; /* More space */
+    margin-top: 1rem; /* Reduced margin since timer-box now has margin-bottom */
     border-top: 1px solid #444;
     padding-top: 1.5rem;
     text-align: left;

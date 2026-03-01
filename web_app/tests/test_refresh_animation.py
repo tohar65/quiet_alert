@@ -1,0 +1,68 @@
+import pytest
+import threading
+import json
+import time
+from playwright.sync_api import Page, expect
+from web_app.web_server import app
+from werkzeug.serving import make_server
+from unittest.mock import patch
+
+class ServerThread(threading.Thread):
+    def __init__(self, app):
+        threading.Thread.__init__(self)
+        self.server = make_server('127.0.0.1', 5006, app)
+        self.ctx = app.app_context()
+        self.ctx.push()
+
+    def run(self):
+        self.server.serve_forever()
+
+    def shutdown(self):
+        self.server.shutdown()
+
+@pytest.fixture(scope="module")
+def test_server():
+    # Mocking necessary backend functions
+    with patch("web_app.web_server.fetch_alerts", return_value=[]), \
+         patch("web_app.web_server.fetch_realtime_alerts", return_value=[]):
+        server = ServerThread(app)
+        server.start()
+        yield
+        server.shutdown()
+        server.join()
+
+import re
+
+def test_refresh_button_animation(page: Page, test_server):
+    # Mock approved locations
+    def handle_locations(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"locations": ["פתח תקווה"]})
+        )
+    page.route("**/api/approved-locations*", handle_locations)
+    
+    # Mock force-refresh with a delay to ensure we can catch the "spinning" state
+    def handle_refresh(route):
+        time.sleep(1) # Delay the response
+        route.fulfill(status=200, body=json.dumps({"status": "ok"}))
+    page.route("**/api/force-refresh*", handle_refresh)
+
+    page.goto("http://127.0.0.1:5006/")
+    
+    refresh_btn = page.locator("#refresh-btn")
+    
+    # Initially should NOT have spinning class
+    expect(refresh_btn).not_to_have_class(re.compile(r"spinning"))
+    
+    # Click it (use no_wait_after=True because it might be slow)
+    refresh_btn.click(no_wait_after=True)
+    
+    # Should have spinning class while request is in progress
+    # (Since we added 1s delay in handle_refresh)
+    expect(refresh_btn).to_have_class(re.compile(r"spinning"))
+    
+    # Wait for the spinning class to be removed (request finishes)
+    # We increase timeout just in case
+    expect(refresh_btn).not_to_have_class(re.compile(r"spinning"), timeout=10000)

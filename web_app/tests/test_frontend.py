@@ -72,8 +72,8 @@ def test_frontend_renders_alerts_correctly(page: Page, test_server):
     expect(page.locator("text='ירי רקטות וטילים'").first).to_be_visible()
     
     # Check that the exact formatted time matches the screenshot format exactly
-    # e.g., "19:35", not "2/28/2026, 7:35:00 PM"
+    # e.g., "17:35", not "2/28/2026, 7:35:00 PM"
     time_locators = page.locator(".alert-time, .history-time")
-    expect(time_locators.nth(0)).to_have_text("19:35")
-    expect(time_locators.nth(1)).to_have_text("19:25")
-    expect(time_locators.nth(2)).to_have_text("19:18")
+    expect(time_locators.nth(0)).to_have_text("17:35")
+    expect(time_locators.nth(1)).to_have_text("17:25")
+    expect(time_locators.nth(2)).to_have_text("17:18")

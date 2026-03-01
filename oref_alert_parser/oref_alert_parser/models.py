@@ -28,13 +28,14 @@ THREAT_PATTERNS = {
 }
 
 class Alert:
-    def __init__(self, alertDate, title, location, oref_category, status, threat_type):
+    def __init__(self, alertDate, title, location, oref_category, status, threat_type, message=None):
         self.alertDate = alertDate
         self.title = title
         self.location = location
         self.oref_category = oref_category
         self.status = status
         self.threat_type = threat_type
+        self.message = message
 
     def to_dict(self):
         return {
@@ -43,5 +44,6 @@ class Alert:
             "location": self.location,
             "oref_category": self.oref_category,
             "status": self.status.value if self.status else None,
-            "threat_type": self.threat_type.value if self.threat_type else None
+            "threat_type": self.threat_type.value if self.threat_type else None,
+            "message": self.message
         }

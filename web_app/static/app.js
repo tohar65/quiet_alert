@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const alertsContainer = document.getElementById('alerts-container');
     const timerContainer = document.getElementById('timer-container');
     const approvedLocationsDatalist = document.getElementById('approved-locations');
+    const liveSyncIndicator = document.getElementById('live-sync-indicator');
 
     let userLocation = '';
     let fetchInterval;
@@ -12,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Timer state
     let lastAlertTimestamp = null;
+    let lastAlertStatus = null;
+    let lastAlertMessage = null;
+    let lastAlertTitle = null;
     let timerInterval = null;
     let currentAlertsSignature = ''; // For checking if alerts changed
 
@@ -43,6 +47,12 @@ document.addEventListener('DOMContentLoaded', () => {
             alertsContainer.innerHTML = '<div class="alert-loading">Enter a location to begin.</div>';
             return [];
         }
+        
+        if (liveSyncIndicator) {
+            liveSyncIndicator.classList.add('syncing');
+            liveSyncIndicator.classList.remove('error');
+        }
+
         try {
             const url = `/api/alerts/all?location=${encodeURIComponent(userLocation)}`;
             const response = await fetch(url);
@@ -52,14 +62,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
             errorCounter = 0;
-            return data.alerts || [];
+            
+            // If data is currently syncing on the backend, we might have 0 alerts
+            // but we shouldn't necessarily clear everything if we have old alerts.
+            // However, the backend now returns last known data even during sync.
+            return {
+                alerts: data.alerts || [],
+                syncing: data.syncing || false
+            };
         } catch (error) {
             console.error('Error fetching all alerts:', error);
             errorCounter++;
             if (errorCounter >= 3) {
                 alertsContainer.innerHTML = `<div class="alert-error">Reconnecting...</div>`;
+                if (liveSyncIndicator) {
+                    liveSyncIndicator.classList.add('error');
+                }
             }
-            return [];
+            return { alerts: [], syncing: false };
+        } finally {
+            if (liveSyncIndicator) {
+                setTimeout(() => {
+                    liveSyncIndicator.classList.remove('syncing');
+                }, 500);
+            }
         }
     };
 
@@ -71,7 +97,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTimer = () => {
-        if (!lastAlertTimestamp) {
+        const isSafeToLeave = lastAlertMessage === 'ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו' || 
+                             lastAlertTitle === 'ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו';
+
+        if (!lastAlertTimestamp || isSafeToLeave) {
             timerContainer.style.display = 'none';
             if (timerInterval) clearInterval(timerInterval);
             return;
@@ -82,23 +111,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const diffSeconds = Math.floor((now - alertTime) / 1000);
 
         if (diffSeconds < 0) {
-            // Future alert? Should not happen usually, but treat as 0
+            // If the alert is in the future (skew), show 00:00
              timerContainer.innerHTML = `<div class="timer-box">Time passed: 00:00</div>`;
              return;
         }
 
         timerContainer.style.display = 'block';
+        const timeStr = formatTime(diffSeconds);
         
-        if (diffSeconds >= 600) { // 10 minutes
-            timerContainer.innerHTML = `<div class="timer-box safe">Safe to exit (10 mins passed)</div>`;
+        let timerClass = 'timer-box';
+        let statusText = '';
+        
+        if (lastAlertStatus === 'upcoming') {
+            if (diffSeconds >= 600) {
+                timerClass += ' timer-danger';
+                statusText = ' (Warning: Long delay)';
+            } else {
+                timerClass += ' warning';
+                statusText = ' (Alert may sound any moment)';
+            }
         } else {
-             timerContainer.innerHTML = `<div class="timer-box warning">Time passed: ${formatTime(diffSeconds)}</div>`;
+            // "Actual" alert (status is 'active' or other, but we assume active if not upcoming)
+            if (diffSeconds >= 600) {
+                timerClass += ' safe timer-safe';
+                statusText = ' (Safe to exit)';
+            } else {
+                timerClass += ' warning';
+            }
         }
+        
+        timerContainer.innerHTML = `<div class="${timerClass}">Time passed: ${timeStr}${statusText}</div>`;
     };
 
     // Check if alerts have changed to avoid unnecessary re-renders
-    const hasAlertsChanged = (newAlerts) => {
-        const newSignature = JSON.stringify(newAlerts);
+    const hasAlertsChanged = (newAlerts, syncing) => {
+        const newSignature = JSON.stringify({ alerts: newAlerts, syncing });
         if (newSignature === currentAlertsSignature) {
             return false;
         }
@@ -107,50 +154,39 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Display the latest alert at the top (styled as before), and the rest as history
-    const displayAlerts = (alerts) => {
-        // Handle Timer Logic based on the latest ACTIVE alert
-        const activeAlert = alerts.find(a => a.status === 'active');
-        
-        if (activeAlert) {
-            const activeTime = activeAlert.alertDate; // Assuming ISO string
-            // If it's a new active alert (different timestamp), or we just started tracking
-            if (activeTime !== lastAlertTimestamp) {
-                lastAlertTimestamp = activeTime;
-                // Restart timer interval if not running
+    const displayAlerts = (alerts, syncing = false) => {
+        // Timer Logic: Always use the latest alert for the active location
+        if (alerts && alerts.length > 0) {
+            const latestAlertTime = alerts[0].alertDate;
+            const latestStatus = alerts[0].status;
+            const latestMessage = alerts[0].message;
+            const latestTitle = alerts[0].title;
+            
+            if (latestAlertTime !== lastAlertTimestamp || 
+                latestStatus !== lastAlertStatus || 
+                latestMessage !== lastAlertMessage || 
+                latestTitle !== lastAlertTitle) {
+                lastAlertTimestamp = latestAlertTime;
+                lastAlertStatus = latestStatus;
+                lastAlertMessage = latestMessage;
+                lastAlertTitle = latestTitle;
                 if (timerInterval) clearInterval(timerInterval);
                 timerInterval = setInterval(updateTimer, 1000);
             }
-             updateTimer(); // Immediate update
-        } else {
-            // No active alerts
-            if (lastAlertTimestamp) {
-                // If we were tracking an alert, but now it's gone or ended...
-                // Option A: Keep timer until user clears it? 
-                // Option B: Clear timer immediately.
-                // The requirement says: "When a new alert (active/recent) is detected: Start/Reset a timer."
-                // And "After 10 minutes, display a 'Safe to exit'".
-                // If the alert status changes to 'ended', we might still want to show the timer if < 10 mins?
-                // However, usually 'active' means it just happened.
-                
-                // Let's keep the timer running if we have a timestamp, until it hits 10 mins or is manually cleared?
-                // For now, if no active alert is returned in the list, we might assume the event is over.
-                // But the 'history' might still contain it.
-                // Let's look at the first alert in the list.
-            }
-             // If the top alert is not active (e.g. ended), we might still want to show "Safe to exit" if it was recent.
-             const topAlert = alerts[0];
-             if (topAlert && (new Date() - new Date(topAlert.alertDate) < 600000 + 5000)) { // 10m + buffer
-                 if (topAlert.alertDate !== lastAlertTimestamp) {
-                     lastAlertTimestamp = topAlert.alertDate;
-                     if (timerInterval) clearInterval(timerInterval);
-                     timerInterval = setInterval(updateTimer, 1000);
-                 }
-                 updateTimer();
-             } else {
-                 lastAlertTimestamp = null;
-                 if (timerInterval) clearInterval(timerInterval);
-                 timerContainer.style.display = 'none';
-             }
+            updateTimer(); // Immediate update
+        } else if (!syncing) {
+            lastAlertTimestamp = null;
+            lastAlertStatus = null;
+            lastAlertMessage = null;
+            lastAlertTitle = null;
+            if (timerInterval) clearInterval(timerInterval);
+            timerContainer.style.display = 'none';
+        }
+
+        // Regression Fix: Don't show loading message if we already have alerts to show
+        if (syncing && alerts.length === 0) {
+            alertsContainer.innerHTML = '<div class="alert-item alert-loading">Syncing data...</div>';
+            return;
         }
 
         alertsContainer.innerHTML = '';
@@ -158,11 +194,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const alert = alerts[0]; // Show only the most recent alert
             const alertElement = document.createElement('div');
             alertElement.className = 'alert-item';
+            
+            // Handle statuses
             if (alert.status === 'active') {
                 alertElement.classList.add('active');
             } else if (alert.status === 'upcoming') {
                 alertElement.classList.add('alert-upcoming');
-            } else if (alert.status === 'ended') {
+            } else {
+                // Default to calm if no status or ended
                 alertElement.classList.add('alert-calm');
             }
 
@@ -176,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             threatElement.textContent = alert.title;
             alertElement.appendChild(threatElement);
 
-            if (alert.message) {
+            if (alert.message && alert.message !== alert.title) {
                 const messageElement = document.createElement('div');
                 messageElement.className = 'alert-message';
                 messageElement.textContent = alert.message;
@@ -187,9 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             timeElement.className = 'alert-time';
             
             // Format time to exactly HH:MM as shown in the screenshots
-            console.log(`[DEBUG] Received alertDate: ${alert.alertDate}`); // Add logging
             const dateObj = new Date(alert.alertDate);
-            console.log(`[DEBUG] Parsed dateObj: ${dateObj.toString()}`); // Add logging
             
             // Format in Israel time
             const timeString = dateObj.toLocaleTimeString('en-US', { 
@@ -204,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             alertsContainer.appendChild(alertElement);
         } else {
-            alertsContainer.innerHTML = '<div class="alert-item calm">All Quiet</div>';
+            alertsContainer.innerHTML = '<div class="alert-item alert-calm">All Quiet</div>';
         }
     };
 
@@ -232,12 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 locationElement.className = 'history-location';
                 locationElement.textContent = alert.location;
                 detailsElement.appendChild(locationElement);
-                if (alert.message) {
-                    const messageElement = document.createElement('div');
-                    messageElement.className = 'history-message';
-                    messageElement.textContent = alert.message;
-                    detailsElement.appendChild(messageElement);
-                }
+                // Removed duplicate message display
                 historyElement.appendChild(detailsElement);
                 const timeElement = document.createElement('div');
                 timeElement.className = 'history-time';
@@ -273,31 +305,58 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Modified startFetching to save location ---
-    const startFetching = () => {
-        userLocation = locationInput.value.trim();
+    const startFetching = async () => {
+        const newLocation = locationInput.value.trim();
+        
+        // If location is the same and we are already fetching, trigger force refresh
+        if (newLocation === userLocation && fetchInterval) {
+            checkAlertsBtn.classList.add('loading-aurora');
+            try {
+                const response = await fetch('/api/force-refresh', { method: 'POST' });
+                if (response.ok) {
+                    currentAlertsSignature = ''; // Force UI update
+                    const { alerts, syncing } = await fetchAllAlerts();
+                    displayAlerts(alerts, syncing);
+                    displayHistory(alerts);
+                }
+            } catch (e) {
+                console.error("Force refresh failed", e);
+            } finally {
+                setTimeout(() => {
+                    checkAlertsBtn.classList.remove('loading-aurora');
+                }, 300);
+            }
+            return;
+        }
+
+        userLocation = newLocation;
         if (fetchInterval) {
             clearInterval(fetchInterval);
         }
         if (userLocation) {
             saveLastLocation(userLocation);
+            
+            // Start animation IMMEDIATELY on click
+            checkAlertsBtn.classList.add('loading-aurora');
+            
             const fetchAndRender = async () => {
-                const allAlerts = await fetchAllAlerts();
-                if (hasAlertsChanged(allAlerts)) {
-                    displayAlerts(allAlerts);
-                    displayHistory(allAlerts);
-                } else {
-                    // Even if alerts didn't change, we might need to update the timer? 
-                    // The timer runs on its own setInterval (timerInterval), so we don't need to do it here.
-                    // However, we need to ensure the timer logic is checked if we start with existing alerts.
-                    // Actually, displayAlerts sets up the timer. If we don't call displayAlerts, we might miss setting up the timer on initial load?
-                    // But hasAlertsChanged will be true on first load (currentAlertsSignature is empty).
-                    
-                    // One edge case: if we refresh the page, we fetch alerts. hasAlertsChanged = true. displayAlerts is called. Timer starts.
-                    // Next fetch: alerts same. hasAlertsChanged = false. displayAlerts NOT called.
-                    // But timerInterval is already running from the first call. So we are good.
+                const { alerts, syncing } = await fetchAllAlerts();
+                if (hasAlertsChanged(alerts, syncing)) {
+                    displayAlerts(alerts, syncing);
+                    displayHistory(alerts);
                 }
             };
-            fetchAndRender();
+            
+            try {
+                // Initial fetch
+                await fetchAndRender();
+            } finally {
+                // Ensure smooth transition out
+                setTimeout(() => {
+                    checkAlertsBtn.classList.remove('loading-aurora');
+                }, 300); // Small delay to ensure the "elegant" beam finishes or feels natural
+            }
+            
             fetchInterval = setInterval(fetchAndRender, 2000);
         } else {
             alertsContainer.innerHTML = '<div class="alert-loading">Please enter a location.</div>';

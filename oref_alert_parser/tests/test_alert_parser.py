@@ -205,7 +205,7 @@ def test_fetch_alerts_success(mock_get, mock_alerts_list_raw):
     
     # Verify the URL matches the updated one
     mock_get.assert_called_once_with(
-        "https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json",
+        "https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1",
         headers=unittest.mock.ANY,
         stream=True
     )

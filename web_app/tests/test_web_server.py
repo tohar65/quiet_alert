@@ -37,3 +37,15 @@ def test_get_alerts(client, mocker):
     assert response.status_code == 200
     assert len(data) == 1
     assert data[0]['location'] == "Test Location"
+
+def test_force_refresh(client):
+    """
+    Test case for force refresh endpoint.
+    """
+    # Act
+    response = client.post('/api/force-refresh')
+    data = json.loads(response.data)
+
+    # Assert
+    assert response.status_code == 200
+    assert data['status'] == "success"

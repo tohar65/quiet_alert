@@ -6,19 +6,24 @@
     <title>Quiet Alert</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Assistant:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Assistant:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Quiet Alert Status</h1>
+        <div class="header-container">
+            <h1>Quiet Alert Status</h1>
+            <div id="live-sync-indicator" class="live-sync" title="System is active">
+                <span class="sync-icon">●</span>
+            </div>
+        </div>
         <div class="location-setter">
             <input type="text" id="location-input" list="approved-locations" placeholder="Enter location (e.g., 'פתח תקווה')">
             <datalist id="approved-locations"></datalist>
             <button id="check-alerts-btn" disabled>Check Alerts</button>
         </div>
-        <div id="timer-container" style="display: none;"></div>
         <div id="alerts-container"></div>
+        <div id="timer-container" style="display: none;"></div>
         <div id="history-container"></div>
     </div>
     <script src="{{ url_for('static', filename='app.js') }}"></script>

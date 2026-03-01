@@ -13,4 +13,5 @@ oref_alert_parser.egg-info/entry_points.txt
 oref_alert_parser.egg-info/top_level.txt
 tests/test_alert_parser.py
 tests/test_alert_types.py
+tests/test_realtime_alerts.py
 tests/test_system_main.py

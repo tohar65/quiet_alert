@@ -3,6 +3,11 @@ import requests
 import json
 import gzip
 from datetime import datetime, timezone, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    # Fallback for older Python versions if needed, though we know it's 3.12
+    ZoneInfo = None
 from colorama import Fore
 from .models import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
 
@@ -29,6 +34,12 @@ class OrefAlertParser:
         if not title and "title" in alert:
             title = alert["title"]
             
+        # For the new GetAlarmsHistory.aspx endpoint, the description is in category_desc
+        # and title might be missing.
+        category_desc = alert.get("category_desc")
+        if not title and category_desc:
+            title = category_desc
+            
         status = CATEGORY_TO_STATUS.get(oref_category)
         threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
 
@@ -43,20 +54,38 @@ class OrefAlertParser:
             
         # Real-time alerts might not have `alertDate`, so default to current UTC time if missing
         if raw_date is None and "id" in alert:
+            # We use UTC for real-time alerts created on the fly
             raw_date = datetime.now(timezone.utc)
             
         alert_date_obj = None
         if isinstance(raw_date, str):
             try:
-                # The API provides dates in "YYYY-MM-DD HH:MM:SS" format in UTC.
-                # We attach the UTC timezone so it is serialized properly.
-                alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
-                alert_date_obj = alert_date_obj.replace(tzinfo=timezone.utc)
+                # The API provides dates in "YYYY-MM-DD HH:MM:SS" format in Israel time.
+                # We should NOT mark it as UTC if it's already local time.
+                if "T" in raw_date:
+                    alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%dT%H:%M:%S")
+                else:
+                    alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+                
+                # Since the API data is in Israel time, we attach the Israel timezone.
+                # This correctly handles standard/daylight savings time.
+                try:
+                    if ZoneInfo:
+                        alert_date_obj = alert_date_obj.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))
+                    else:
+                        raise ImportError
+                except Exception:
+                    # Fallback to fixed offset if ZoneInfo or the specific zone is not available
+                    # Note: We use a fixed offset of +2. This is correct for most of the year.
+                    # For a production app on Windows without tzdata, we might need a better way,
+                    # but this fixes the immediate double-offset bug.
+                    israel_tz = timezone(timedelta(hours=2))
+                    alert_date_obj = alert_date_obj.replace(tzinfo=israel_tz)
             except (ValueError, TypeError):
                 # In case of format errors or if raw_date is None, leave it as None.
                 alert_date_obj = None
         elif isinstance(raw_date, datetime):
-            # If it's already a datetime object, use it directly.
+            # If it's already a datetime object (like from datetime.now(timezone.utc)), use it.
             alert_date_obj = raw_date
 
         # The category for ended alerts can be inconsistent. A reliable way to identify
@@ -84,7 +113,8 @@ class OrefAlertParser:
             location=alert.get("data", []),
             oref_category=oref_category,
             status=status,
-            threat_type=threat_type
+            threat_type=threat_type,
+            message=alert.get("category_desc")
         )
 
     def _categorize_alerts(self):
@@ -191,7 +221,7 @@ def fetch_alerts():
     Fetches alert data from the oref.org.il API, handling potential compression
     and JSON decoding issues.
     """
-    url = "https://www.oref.org.il/warningMessages/alert/History/AlertsHistory.json"
+    url = "https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
         'Referer': 'https://www.oref.org.il/heb/alerts-history',
