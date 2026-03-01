@@ -1,10 +1,11 @@
-document.addEventListener('DOMContentLoaded', () => {
+document:addEventListener('DOMContentLoaded', () => {
     const locationInput = document.getElementById('location-input');
     const checkAlertsBtn = document.getElementById('check-alerts-btn');
     const alertsContainer = document.getElementById('alerts-container');
     const timerContainer = document.getElementById('timer-container');
     const approvedLocationsDatalist = document.getElementById('approved-locations');
     const liveSyncIndicator = document.getElementById('live-sync-indicator');
+    const syncStatusText = document.getElementById('sync-status-text');
 
     let userLocation = '';
     let fetchInterval;
@@ -18,6 +19,51 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastAlertTitle = null;
     let timerInterval = null;
     let currentAlertsSignature = ''; // For checking if alerts changed
+
+    // Live Sync state
+    let lastSuccessfulSync = null;
+    let statusUpdateInterval = null;
+
+    const updateSyncStatusDisplay = () => {
+        if (!syncStatusText) return;
+
+        if (liveSyncIndicator.classList.contains('error')) {
+            syncStatusText.textContent = 'Offline';
+            return;
+        }
+
+        if (liveSyncIndicator.classList.contains('syncing')) {
+            syncStatusText.textContent = 'Updating...';
+            return;
+        }
+
+        if (!lastSuccessfulSync) {
+            syncStatusText.textContent = 'Live';
+            return;
+        }
+
+        const now = new Date();
+        const diffSeconds = Math.floor((now - lastSuccessfulSync) / 1000);
+
+        if (diffSeconds > 10) {
+            liveSyncIndicator.classList.add('stale');
+            liveSyncIndicator.classList.remove('active');
+        } else {
+            liveSyncIndicator.classList.remove('stale');
+            liveSyncIndicator.classList.add('active');
+        }
+
+        if (diffSeconds < 1) {
+            syncStatusText.textContent = 'Live: Just now';
+        } else {
+            syncStatusText.textContent = `Live: ${diffSeconds}s ago`;
+        }
+    };
+
+    // Start status update interval
+    if (!statusUpdateInterval) {
+        statusUpdateInterval = setInterval(updateSyncStatusDisplay, 1000);
+    }
 
     const fetchApprovedLocations = async () => {
         try {
@@ -51,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (liveSyncIndicator) {
             liveSyncIndicator.classList.add('syncing');
             liveSyncIndicator.classList.remove('error');
+            updateSyncStatusDisplay();
         }
 
         try {
@@ -62,10 +109,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
             errorCounter = 0;
+            lastSuccessfulSync = new Date();
             
-            // If data is currently syncing on the backend, we might have 0 alerts
-            // but we shouldn't necessarily clear everything if we have old alerts.
-            // However, the backend now returns last known data even during sync.
+            if (liveSyncIndicator) {
+                liveSyncIndicator.classList.remove('error');
+            }
+            
             return {
                 alerts: data.alerts || [],
                 syncing: data.syncing || false
@@ -77,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alertsContainer.innerHTML = `<div class="alert-error">Reconnecting...</div>`;
                 if (liveSyncIndicator) {
                     liveSyncIndicator.classList.add('error');
+                    liveSyncIndicator.classList.remove('active', 'syncing', 'stale');
                 }
             }
             return { alerts: [], syncing: false };
@@ -84,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (liveSyncIndicator) {
                 setTimeout(() => {
                     liveSyncIndicator.classList.remove('syncing');
+                    updateSyncStatusDisplay();
                 }, 500);
             }
         }
@@ -193,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (alerts && alerts.length > 0) {
             const alert = alerts[0]; // Show only the most recent alert
             const alertElement = document.createElement('div');
-            alertElement.className = 'alert-item';
+            alertElement.className = 'alert-item alert-entry-animate'; // Added entry animation
             
             // Handle statuses
             if (alert.status === 'active') {
@@ -241,7 +292,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             alertsContainer.appendChild(alertElement);
         } else {
-            alertsContainer.innerHTML = '<div class="alert-item alert-calm">All Quiet</div>';
+            const calmElement = document.createElement('div');
+            calmElement.className = 'alert-item alert-calm alert-entry-animate';
+            calmElement.textContent = 'All Quiet';
+            alertsContainer.appendChild(calmElement);
         }
     };
 
@@ -311,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // If location is the same and we are already fetching, trigger force refresh
         if (newLocation === userLocation && fetchInterval) {
             checkAlertsBtn.classList.add('loading-aurora');
+            checkAlertsBtn.textContent = 'Checking...';
             try {
                 const response = await fetch('/api/force-refresh', { method: 'POST' });
                 if (response.ok) {
@@ -324,7 +379,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 setTimeout(() => {
                     checkAlertsBtn.classList.remove('loading-aurora');
-                }, 300);
+                    checkAlertsBtn.textContent = 'Check Alerts';
+                }, 800);
             }
             return;
         }
@@ -338,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Start animation IMMEDIATELY on click
             checkAlertsBtn.classList.add('loading-aurora');
+            checkAlertsBtn.textContent = 'Checking...';
             
             const fetchAndRender = async () => {
                 const { alerts, syncing } = await fetchAllAlerts();
@@ -354,7 +411,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Ensure smooth transition out
                 setTimeout(() => {
                     checkAlertsBtn.classList.remove('loading-aurora');
-                }, 300); // Small delay to ensure the "elegant" beam finishes or feels natural
+                    checkAlertsBtn.textContent = 'Check Alerts';
+                }, 800); // Small delay to ensure the aurora feels natural
             }
             
             fetchInterval = setInterval(fetchAndRender, 2000);
