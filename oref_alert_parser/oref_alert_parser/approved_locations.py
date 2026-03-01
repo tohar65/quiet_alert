@@ -1,4 +1,6 @@
-APPROVED_LOCATIONS = [
+from typing import List
+
+APPROVED_LOCATIONS: List[str] = [
     "אבו גוש",
     "אבו נוור",
     "אבו סנאן",
@@ -84,6 +86,7 @@ APPROVED_LOCATIONS = [
     "אחוזם",
     "אחוזת ברק",
     "אחיה",
+    "אחיהוד",
     "אחיהוד",
     "אחיטוב",
     "אחיסמך",

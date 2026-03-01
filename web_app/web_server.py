@@ -3,19 +3,27 @@ import threading
 import time
 from datetime import datetime
 from flask import Flask, jsonify, render_template, request
+from typing import List, Dict, Any, Tuple
 from oref_alert_parser.parser import OrefAlertParser, fetch_realtime_alerts, fetch_alerts
 from oref_alert_parser.approved_locations import APPROVED_LOCATIONS
+from oref_alert_parser.models import Alert
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
 # In-memory cache for real-time alerts and history
-realtime_alerts_cache = []
-history_cache = []
-last_history_fetch = 0
+realtime_alerts_cache: List[Alert] = []
+history_cache: List[Alert] = []
+last_history_fetch: float = 0
 cache_lock = threading.Lock()
 
-def poll_realtime_alerts():
-    """Background thread function to continuously poll for real-time alerts and history."""
+def poll_realtime_alerts() -> None:
+    """
+    Background thread function to continuously poll for real-time alerts and history.
+    Updates the in-memory caches and ensures they don't grow indefinitely.
+
+    Returns:
+        None
+    """
     global realtime_alerts_cache, history_cache, last_history_fetch
     while True:
         try:
@@ -61,35 +69,48 @@ def poll_realtime_alerts():
 
 
 @app.route('/')
-def index():
+def index() -> str:
     """
     Serves the main page.
+
+    Returns:
+        The rendered index.html template.
     """
     return render_template('index.html')
 
 
 @app.route('/alerts')
-def alerts():
+def alerts() -> Any:
     """
     Provides the alert data as a JSON object.
+
+    Returns:
+        A JSON response containing the list of real-time alerts.
     """
     with cache_lock:
         return jsonify([alert.to_dict() for alert in realtime_alerts_cache])
 
 
 @app.route('/api/approved-locations')
-def approved_locations():
+def approved_locations() -> Any:
     """
     Returns the list of approved locations.
+
+    Returns:
+        A JSON response containing the list of approved location names.
     """
     return jsonify({'locations': APPROVED_LOCATIONS})
 
 
 @app.route('/api/force-refresh', methods=['POST'])
-def force_refresh():
+def force_refresh() -> Any:
     """
     Forces the backend to prepare for a fresh history fetch.
+
     Does NOT clear the cache to avoid UI flickers.
+
+    Returns:
+        A JSON response indicating success.
     """
     global last_history_fetch
     with cache_lock:
@@ -98,9 +119,16 @@ def force_refresh():
 
 
 @app.route('/api/alerts/all')
-def all_alerts():
+def all_alerts() -> Any:
     """
     Provides all historical alerts for a specific location.
+
+    Expects a 'location' query parameter. Combines real-time and historical
+    alerts, deduplicates them, and returns the most recent 50.
+
+    Returns:
+        A JSON response containing the list of filtered alerts and sync status,
+        or an error message if the location parameter is missing.
     """
     location = request.args.get('location')
     if not location:
@@ -153,8 +181,8 @@ def all_alerts():
     # Sort by date descending
     # Use datetime.min for alerts with no date so they appear last (or first if ascending, but we want reverse)
     # Since alertDate is naive datetime (as per parser), we can use datetime.min
-    from datetime import datetime
-    final_alerts = sorted(unique_alerts.values(), key=lambda x: x.alertDate if x.alertDate else datetime.min, reverse=True)
+    from datetime import datetime as dt
+    final_alerts = sorted(unique_alerts.values(), key=lambda x: x.alertDate if x.alertDate else dt.min, reverse=True)
 
     # Return top 50
     return jsonify({

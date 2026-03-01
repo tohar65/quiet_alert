@@ -8,10 +8,13 @@ setup(
     author='Tohar Laufer',
     author_email='tohar@example.com',
     url='https://github.com/tohar65/quiet_alert',
+    install_requires=[
+        'requests',
+        'colorama',
+    ],
     entry_points={
         'console_scripts': [
             'oref-alert-parser=oref_alert_parser.main:main',
-            'oref-alert-web-server=oref_alert_parser.web_server:main',
             'update-locations=oref_alert_parser.locations_updater:main',
         ],
     },

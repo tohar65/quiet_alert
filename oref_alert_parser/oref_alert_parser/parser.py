@@ -3,6 +3,7 @@ import requests
 import json
 import gzip
 from datetime import datetime, timezone, timedelta
+from typing import Any, Optional, Union, List, Dict
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -11,92 +12,97 @@ except ImportError:
 from colorama import Fore
 from .models import Alert, AlertStatus, ThreatType, CATEGORY_TO_STATUS, CATEGORY_TO_THREAT_TYPE, THREAT_PATTERNS
 
-# Define Israel Timezone (UTC+2 standard, UTC+3 DST)
-# For simplicity, we can use a fixed offset if pytz/zoneinfo isn't available,
-# but it's better to use pytz or handle DST if possible.
-# Since we don't have pytz guaranteed, we'll try to use a simple offset or just treat as UTC and let the consumer handle display.
-# However, the user wants the parser to fix it.
-# Let's assume the system time is configured correctly and use `astimezone()`.
-
 class OrefAlertParser:
-    def __init__(self, alerts_data):
+    """
+    Parser for Pikud Haoref (Home Front Command) alert data.
+
+    This class handles converting raw JSON data from Oref APIs into structured Alert objects,
+    performing categorization, timezone normalization, and deduplication.
+    """
+
+    def __init__(self, alerts_data: Union[str, List[Dict[str, Any]]]):
+        """
+        Initializes the parser with raw alert data.
+
+        Args:
+            alerts_data: Either a JSON string or a list of dictionaries representing raw alerts.
+        """
         if isinstance(alerts_data, str):
             self.alerts_data = json.loads(alerts_data)
         else:
             self.alerts_data = alerts_data
-        self.alerts = self._categorize_alerts()
+        self.alerts: List[Alert] = self._categorize_alerts()
         self.alerts = self._deduplicate_alerts()
 
-    def _parse_alert(self, alert):
-        """Converts a single Pikud Haoref alert dict to an Alert object with resolved status and threat type."""
-        oref_category = alert.get("category")
+    def _parse_alert(self, alert: Dict[str, Any]) -> Alert:
+        """
+        Converts a single Pikud Haoref alert dict to an Alert object.
+
+        Resolves the status and threat type based on Oref category and title content.
+
+        Args:
+            alert: A dictionary containing raw alert data from the Oref API.
+
+        Returns:
+            An Alert object with normalized fields.
+
+        Raises:
+            ValueError: If an ended alert type cannot be determined from the title.
+        """
+        # Extract initial values
+        oref_category_raw = alert.get("category")
+        if oref_category_raw is None:
+            oref_category_raw = alert.get("cat")
+            
+        oref_category: Optional[int] = None
+        if oref_category_raw is not None:
+            try:
+                oref_category = int(oref_category_raw)
+            except (ValueError, TypeError):
+                pass
+
         title = alert.get("title", "")
         if not title and "title" in alert:
             title = alert["title"]
             
-        # For the new GetAlarmsHistory.aspx endpoint, the description is in category_desc
-        # and title might be missing.
         category_desc = alert.get("category_desc")
         if not title and category_desc:
             title = category_desc
             
-        status = CATEGORY_TO_STATUS.get(oref_category)
-        threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
+        status = CATEGORY_TO_STATUS.get(oref_category) if oref_category is not None else None
+        threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category) if oref_category is not None else None
 
         raw_date = alert.get("alertDate")
         
-        # Real-time alerts format has `cat` instead of `category`
-        if oref_category is None and "cat" in alert:
-            try:
-                oref_category = int(alert["cat"])
-                status = CATEGORY_TO_STATUS.get(oref_category)
-                threat_type = CATEGORY_TO_THREAT_TYPE.get(oref_category)
-            except ValueError:
-                pass
-            
         # Real-time alerts might not have `alertDate`, so default to current UTC time if missing
         if raw_date is None and "id" in alert:
-            # We use UTC for real-time alerts created on the fly
             raw_date = datetime.now(timezone.utc)
             
         alert_date_obj = None
         if isinstance(raw_date, str):
             try:
-                # The API provides dates in "YYYY-MM-DD HH:MM:SS" format in Israel time.
-                # We should NOT mark it as UTC if it's already local time.
                 if "T" in raw_date:
                     alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%dT%H:%M:%S")
                 else:
                     alert_date_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
                 
-                # Since the API data is in Israel time, we attach the Israel timezone.
-                # This correctly handles standard/daylight savings time.
                 try:
                     if ZoneInfo:
                         alert_date_obj = alert_date_obj.replace(tzinfo=ZoneInfo("Asia/Jerusalem"))
                     else:
                         raise ImportError
                 except Exception:
-                    # Fallback to fixed offset if ZoneInfo or the specific zone is not available
-                    # Note: We use a fixed offset of +2. This is correct for most of the year.
-                    # For a production app on Windows without tzdata, we might need a better way,
-                    # but this fixes the immediate double-offset bug.
                     israel_tz = timezone(timedelta(hours=2))
                     alert_date_obj = alert_date_obj.replace(tzinfo=israel_tz)
             except (ValueError, TypeError):
-                # In case of format errors or if raw_date is None, leave it as None.
                 alert_date_obj = None
         elif isinstance(raw_date, datetime):
-            # If it's already a datetime object (like from datetime.now(timezone.utc)), use it.
             alert_date_obj = raw_date
 
-        # The category for ended alerts can be inconsistent. A reliable way to identify
-        # them is by checking for "ended" ("הסתיים" or "הסתיימה") in the title.
-        if "הסתיים" in title or "הסתיימה" in title:
+        # Refine status and threat type for ended alerts
+        if title and ("הסתיים" in title or "הסתיימה" in title):
             status = AlertStatus.ENDED
             
-            # For ended alerts, the threat type must be parsed from the title,
-            # as the category might not be informative.
             threat_type_from_title = None
             for ttype, pattern in THREAT_PATTERNS.items():
                 if pattern.search(title):
@@ -106,7 +112,6 @@ class OrefAlertParser:
             if threat_type_from_title:
                 threat_type = threat_type_from_title
             else:
-                # If it's an ended alert but we can't determine the type, it's an error.
                 raise ValueError(f"Unexpected ended alert type: {title}")
 
         return Alert(
@@ -119,17 +124,28 @@ class OrefAlertParser:
             message=alert.get("category_desc")
         )
 
-    def _categorize_alerts(self):
-        """Converts all alerts to Alert objects with status and threat_type fields."""
+    def _categorize_alerts(self) -> List[Alert]:
+        """
+        Converts all raw alerts to Alert objects.
+
+        Returns:
+            A list of structured Alert objects.
+        """
         return [self._parse_alert(alert) for alert in self.alerts_data]
 
-    def _deduplicate_alerts(self) -> list[Alert]:
-        """Removes duplicate alerts based on location, threat_type, and rounded alertDate."""
+    def _deduplicate_alerts(self) -> List[Alert]:
+        """
+        Removes duplicate alerts.
+
+        Duplicates are identified based on location, threat_type, status, title,
+        category, and alertDate (rounded to the minute).
+
+        Returns:
+            A list of unique Alert objects.
+        """
         seen = set()
         unique_alerts = []
         for alert in self.alerts:
-            # Use a tuple of (location, threat_type, rounded_time) as a unique key
-            # Handle location being a list
             loc_key = tuple(alert.location) if isinstance(alert.location, list) else alert.location
             key = (
                 loc_key,
@@ -144,11 +160,17 @@ class OrefAlertParser:
                 unique_alerts.append(alert)
         return unique_alerts
 
-    def get_alerts(self):
+    def get_alerts(self) -> List[Alert]:
+        """
+        Returns the parsed and deduplicated alerts.
+
+        Returns:
+            A list of Alert objects.
+        """
         return self.alerts
 
 
-def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list[Alert]:
+def filter_alerts_by_location(alerts: List[Alert], locations: List[str]) -> List[Alert]:
     """
     Filters alerts by location.
 
@@ -170,8 +192,6 @@ def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list
             continue
             
         if isinstance(alert.location, list):
-            # If location is a list, check if ANY of the locations match
-            # This logic assumes we want to show the alert if the requested location is involved.
             if any(loc.lower() in location_set for loc in alert.location):
                 filtered_alerts.append(alert)
         elif isinstance(alert.location, str):
@@ -181,25 +201,48 @@ def filter_alerts_by_location(alerts: list[Alert], locations: list[str]) -> list
     return filtered_alerts
 
 
-def get_cities_from_alerts(alerts: list[Alert]) -> list[str]:
-    """Extracts a unique list of cities from a list of alerts."""
+def get_cities_from_alerts(alerts: List[Alert]) -> List[str]:
+    """
+    Extracts a unique list of cities from a list of alerts.
+
+    Args:
+        alerts: A list of Alert objects.
+
+    Returns:
+        A list of unique city/location names.
+    """
     cities = set()
     for alert in alerts:
         if alert.location:
-            cities.add(alert.location)
+            if isinstance(alert.location, list):
+                for loc in alert.location:
+                    cities.add(loc)
+            else:
+                cities.add(alert.location)
     return list(cities)
 
 
-def save_alerts(alerts, filename="alerts.json"):
-    """Saves alert data to a JSON file."""
+def save_alerts(alerts: List[Alert], filename: str = "alerts.json") -> None:
+    """
+    Saves alert data to a JSON file.
+
+    Args:
+        alerts: A list of Alert objects to save.
+        filename: The path to the file where alerts should be saved.
+    """
     if alerts:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump([alert.to_dict() for alert in alerts], f, ensure_ascii=False, indent=4)
         print(f"Alerts saved to {filename}")
 
 
-def display_alerts(alerts):
-    """Displays alerts grouped by status and threat type."""
+def display_alerts(alerts: List[Alert]) -> None:
+    """
+    Displays alerts grouped by status and threat type to the console.
+
+    Args:
+        alerts: A list of Alert objects to display.
+    """
     for status in AlertStatus:
         print(f"--- {status.value.capitalize()} Alerts ---")
         filtered = [a for a in alerts if a.status == status]
@@ -218,10 +261,14 @@ def display_alerts(alerts):
         print(Fore.RESET)
 
 
-def fetch_alerts():
+def fetch_alerts() -> List[Dict[str, Any]]:
     """
-    Fetches alert data from the oref.org.il API, handling potential compression
-    and JSON decoding issues.
+    Fetches alert history data from the oref.org.il API.
+
+    Handles potential compression and JSON decoding issues, including UTF-8 BOM.
+
+    Returns:
+        A list of dictionaries representing raw alerts. Returns an empty list on failure.
     """
     url = "https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1"
     headers = {
@@ -233,28 +280,19 @@ def fetch_alerts():
         'Accept': 'application/json, text/plain, */*',
     }
     try:
-        # Use stream=True to handle the raw response and avoid issues with
-        # incorrect Content-Length headers.
         response = requests.get(url, headers=headers, stream=True)
         response.raise_for_status()
 
-        # Read the raw bytes from the stream, which gives us the complete response.
         raw_content = response.raw.read()
         
         try:
             decompressed_content = raw_content
-            # The 'Content-Encoding' header is a hint, but the content itself is the truth.
-            # We attempt to decompress if the header is present.
             if response.headers.get('Content-Encoding') == 'gzip':
                 try:
                     decompressed_content = gzip.decompress(raw_content)
                 except (gzip.BadGzipFile, OSError):
-                    # If decompression fails, assume it's not actually gzipped.
-                    # The server sometimes sends the header incorrectly.
                     pass
             
-            # The API may send a UTF-8 BOM, which json.loads doesn't handle.
-            # 'utf-8-sig' will correctly decode the content, stripping the BOM if present.
             json_text = decompressed_content.decode('utf-8-sig')
             return json.loads(json_text)
 
@@ -269,11 +307,14 @@ def fetch_alerts():
         return []
 
 
-def fetch_realtime_alerts():
+def fetch_realtime_alerts() -> List[Dict[str, Any]]:
     """
     Fetches real-time alert data from the oref.org.il API.
+
     This endpoint is optimized for high-frequency polling.
-    Returns an empty list if no alerts are active.
+
+    Returns:
+        A list of dictionaries representing active alerts. Returns an empty list if no alerts are active.
     """
     url = "https://www.oref.org.il/warningMessages/alert/Alerts.json"
     headers = {
@@ -291,7 +332,6 @@ def fetch_realtime_alerts():
 
         raw_content = response.raw.read()
 
-        # Handle empty response (no alerts)
         if not raw_content or raw_content.strip() == b"":
              return []
 
@@ -303,10 +343,6 @@ def fetch_realtime_alerts():
                 except (gzip.BadGzipFile, OSError):
                     pass
             
-            # Decode and parse
-            # The real-time endpoint might return a single object or a list.
-            # Oref often returns a flat list or a single object if there's only one.
-            # Let's standardize to a list.
             json_text = decompressed_content.decode('utf-8-sig')
             
             if not json_text.strip():
@@ -322,8 +358,6 @@ def fetch_realtime_alerts():
                 return []
 
         except json.JSONDecodeError:
-            # If it's not valid JSON but we got content, log it but return empty
-            # Sometimes 404s or error pages sneak through as 200s
             return []
 
     except requests.exceptions.RequestException as e:
@@ -331,8 +365,10 @@ def fetch_realtime_alerts():
         return []
 
 
-def process_alerts():
-    """Main function to fetch, save, and display alerts."""
+def process_alerts() -> None:
+    """
+    Main function to fetch, save, and display alerts.
+    """
     alerts_data = fetch_alerts()
     if alerts_data:
         parser = OrefAlertParser(alerts_data)

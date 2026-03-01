@@ -1,34 +1,61 @@
 import re
 from enum import Enum
+from datetime import datetime
+from typing import Optional, Union, List, Dict, Any
 
 class AlertStatus(Enum):
+    """Enumeration of possible alert statuses."""
     ACTIVE = "active"
     UPCOMING = "upcoming"
     ENDED = "ended"
 
 class ThreatType(Enum):
+    """Enumeration of threat types."""
     ROCKET = "rocket"
     AIRCRAFT_INTRUSION = "aircraft intrusion"
 
-CATEGORY_TO_STATUS = {
+CATEGORY_TO_STATUS: Dict[int, AlertStatus] = {
     1: AlertStatus.ACTIVE,
     2: AlertStatus.ACTIVE,
     13: AlertStatus.ENDED,
     14: AlertStatus.UPCOMING
 }
 
-CATEGORY_TO_THREAT_TYPE = {
+CATEGORY_TO_THREAT_TYPE: Dict[int, ThreatType] = {
     1: ThreatType.ROCKET,
     2: ThreatType.AIRCRAFT_INTRUSION,
 }
 
-THREAT_PATTERNS = {
+THREAT_PATTERNS: Dict[ThreatType, re.Pattern] = {
     ThreatType.ROCKET: re.compile(r"ירי רקטות|טילים|התרעת ירי רקטות וטילים"),
     ThreatType.AIRCRAFT_INTRUSION: re.compile(r"כלי טיס עוין")
 }
 
 class Alert:
-    def __init__(self, alertDate, title, location, oref_category, status, threat_type, message=None):
+    """
+    Represents a normalized alert.
+
+    Attributes:
+        alertDate: The date and time of the alert (Israel time).
+        title: The Hebrew title of the alert.
+        location: A list of locations or a single location string.
+        oref_category: The raw category ID from Oref.
+        status: The normalized AlertStatus.
+        threat_type: The normalized ThreatType.
+        message: Additional message or description.
+    """
+
+    def __init__(
+        self, 
+        alertDate: Optional[datetime], 
+        title: str, 
+        location: Union[str, List[str]], 
+        oref_category: Optional[int], 
+        status: Optional[AlertStatus], 
+        threat_type: Optional[ThreatType], 
+        message: Optional[str] = None
+    ):
+        """Initializes an Alert object."""
         self.alertDate = alertDate
         self.title = title
         self.location = location
@@ -37,7 +64,13 @@ class Alert:
         self.threat_type = threat_type
         self.message = message
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts the Alert object to a dictionary.
+
+        Returns:
+            A dictionary representation of the alert.
+        """
         return {
             "alertDate": self.alertDate.isoformat() if self.alertDate else None,
             "title": self.title,

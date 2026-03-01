@@ -15,6 +15,12 @@ def client():
         with cache_lock:
             realtime_alerts_cache.clear()
             history_cache.clear()
+        
+        # Ensure imports for tests are clean
+        import web_app.web_server
+        web_app.web_server.realtime_alerts_cache = realtime_alerts_cache
+        web_app.web_server.history_cache = history_cache
+        
         yield client
 
 def test_index_route(client):

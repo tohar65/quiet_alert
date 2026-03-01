@@ -7,10 +7,15 @@ from colorama import init
 from .parser import OrefAlertParser, fetch_alerts, save_alerts, display_alerts, filter_alerts_by_location
 from .models import Alert
 
-def main():
+def main() -> None:
     """
     Main function to fetch, process, and display alerts.
+
     Supports filtering by location and logging to a file.
+    Can also be used to launch the web server.
+
+    Returns:
+        None
     """
     init()
 
