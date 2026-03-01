@@ -137,8 +137,9 @@ document:addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTimer = () => {
-        const isSafeToLeave = lastAlertMessage === 'ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו' || 
-                             lastAlertTitle === 'ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו';
+        const isSafeToLeave = (lastAlertMessage && (lastAlertMessage.includes('ניתן לצאת מהמרחב המוגן') || lastAlertMessage.includes('האירוע הסתיים'))) || 
+                              (lastAlertTitle && (lastAlertTitle.includes('ניתן לצאת מהמרחב המוגן') || lastAlertTitle.includes('האירוע הסתיים'))) ||
+                              lastAlertStatus === 'ended';
 
         if (!lastAlertTimestamp || isSafeToLeave) {
             timerContainer.style.display = 'none';
@@ -426,8 +427,10 @@ document:addEventListener('DOMContentLoaded', () => {
         const title = alert.title || '';
         const message = alert.message || '';
 
-        // Rule 1: Safe to leave -> green
-        if (title.includes('ניתן לצאת מהמרחב המוגן') || message.includes('ניתן לצאת מהמרחב המוגן')) {
+        // Rule 1: Safe to leave / Ended -> green
+        if (title.includes('ניתן לצאת מהמרחב המוגן') || message.includes('ניתן לצאת מהמרחב המוגן') ||
+            title.includes('האירוע הסתיים') || message.includes('האירוע הסתיים') ||
+            alert.status === 'ended') {
             return 'alert-green';
         }
 

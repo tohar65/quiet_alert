@@ -265,7 +265,7 @@ def test_color_coding_logic(page: Page, test_server):
     assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_yellow)})") == "alert-yellow"
     
     # Upcoming by category -> yellow
-    alert_cat14 = {"status": "ended", "oref_category": 14}
+    alert_cat14 = {"status": "active", "oref_category": 14}
     assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_cat14)})") == "alert-yellow"
     
     # Upcoming by Hebrew text -> yellow
@@ -279,3 +279,7 @@ def test_color_coding_logic(page: Page, test_server):
     # Safe to leave -> green
     alert_green = {"status": "active", "title": "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו"}
     assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_green)})") == "alert-green"
+
+    # Ended event -> green
+    alert_ended = {"status": "ended", "title": "ירי רקטות וטילים - האירוע הסתיים"}
+    assert page.evaluate(f"window.getAlertColorClass({json.dumps(alert_ended)})") == "alert-green"
