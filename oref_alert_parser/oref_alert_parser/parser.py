@@ -261,18 +261,24 @@ def display_alerts(alerts: List[Alert]) -> None:
         print(Fore.RESET)
 
 
-def fetch_alerts() -> List[Dict[str, Any]]:
+def fetch_alerts(url: Optional[str] = None, user_agent: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Fetches alert history data from the oref.org.il API.
 
     Handles potential compression and JSON decoding issues, including UTF-8 BOM.
 
+    Args:
+        url: The URL to fetch from. If None, uses default Oref history URL.
+        user_agent: The User-Agent to use. If None, uses default.
+
     Returns:
         A list of dictionaries representing raw alerts. Returns an empty list on failure.
     """
-    url = "https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1"
+    if url is None:
+        url = "https://alerts-history.oref.org.il//Shared/Ajax/GetAlarmsHistory.aspx?lang=he&mode=1"
+    
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
+        'User-Agent': user_agent or 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
         'Referer': 'https://www.oref.org.il/heb/alerts-history',
         'sec-ch-ua': '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
         'sec-ch-ua-mobile': '?1',
@@ -280,7 +286,7 @@ def fetch_alerts() -> List[Dict[str, Any]]:
         'Accept': 'application/json, text/plain, */*',
     }
     try:
-        response = requests.get(url, headers=headers, stream=True)
+        response = requests.get(url, headers=headers, stream=True, timeout=10)
         response.raise_for_status()
 
         raw_content = response.raw.read()
@@ -307,18 +313,24 @@ def fetch_alerts() -> List[Dict[str, Any]]:
         return []
 
 
-def fetch_realtime_alerts() -> List[Dict[str, Any]]:
+def fetch_realtime_alerts(url: Optional[str] = None, user_agent: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Fetches real-time alert data from the oref.org.il API.
 
     This endpoint is optimized for high-frequency polling.
 
+    Args:
+        url: The URL to fetch from. If None, uses default Oref realtime URL.
+        user_agent: The User-Agent to use. If None, uses default.
+
     Returns:
         A list of dictionaries representing active alerts. Returns an empty list if no alerts are active.
     """
-    url = "https://www.oref.org.il/warningMessages/alert/Alerts.json"
+    if url is None:
+        url = "https://www.oref.org.il/warningMessages/alert/Alerts.json"
+        
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
+        'User-Agent': user_agent or 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36',
         'Referer': 'https://www.oref.org.il/',
         'sec-ch-ua': '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
         'sec-ch-ua-mobile': '?1',
@@ -327,7 +339,7 @@ def fetch_realtime_alerts() -> List[Dict[str, Any]]:
         'X-Requested-With': 'XMLHttpRequest'
     }
     try:
-        response = requests.get(url, headers=headers, stream=True)
+        response = requests.get(url, headers=headers, stream=True, timeout=10)
         response.raise_for_status()
 
         raw_content = response.raw.read()

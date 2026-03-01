@@ -3,9 +3,11 @@ from playwright.sync_api import Page, expect
 import json
 import os
 import threading
-from web_app.web_server import app
+from web_app.web_server import app, get_provider
 from werkzeug.serving import make_server
 from unittest.mock import patch
+from oref_alert_parser.parser import OrefAlertParser
+import web_app.web_server as ws
 
 # Use the same test data structure
 TEST_DATA = {
@@ -44,8 +46,14 @@ class ServerThread(threading.Thread):
 
 @pytest.fixture(scope="module")
 def test_server():
-    with patch("web_app.web_server.fetch_alerts", return_value=RAW_OREF_DATA), \
-         patch("web_app.web_server.fetch_realtime_alerts", return_value=[]):
+    provider = get_provider()
+    with patch.object(provider, "fetch_history_alerts", return_value=OrefAlertParser(RAW_OREF_DATA).get_alerts()), \
+         patch.object(provider, "fetch_realtime_alerts", return_value=[]):
+        
+        # Populate cache
+        ws.history_cache = OrefAlertParser(RAW_OREF_DATA).get_alerts()
+        ws.last_history_fetch = 1
+        
         server = ServerThread(app)
         server.start()
         yield
@@ -81,7 +89,7 @@ def test_timer_visible_for_regular_alert(page: Page, test_server):
     page.on("console", lambda msg: print(f"BROWSER CONSOLE: {msg.text}"))
 
     # Override the mock for this specific test to show a regular alert
-    regular_alert = [{
+    regular_alert_raw = [{
         "data": "פתח תקווה",
         "category": "missiles",
         "alertDate": "2026-02-28 17:25:34",
@@ -89,7 +97,11 @@ def test_timer_visible_for_regular_alert(page: Page, test_server):
         "id": "2"
     }]
     
-    with patch("web_app.web_server.fetch_alerts", return_value=regular_alert):
+    provider = get_provider()
+    with patch.object(provider, "fetch_history_alerts", return_value=OrefAlertParser(regular_alert_raw).get_alerts()):
+        # Force update cache for this test
+        ws.history_cache = OrefAlertParser(regular_alert_raw).get_alerts()
+        
         def handle_locations(route):
             route.fulfill(
                 status=200,

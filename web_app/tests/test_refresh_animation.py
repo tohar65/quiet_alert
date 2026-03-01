@@ -3,9 +3,10 @@ import threading
 import json
 import time
 from playwright.sync_api import Page, expect
-from web_app.web_server import app
+from web_app.web_server import app, get_provider
 from werkzeug.serving import make_server
 from unittest.mock import patch
+import web_app.web_server as ws
 
 class ServerThread(threading.Thread):
     def __init__(self, app):
@@ -22,9 +23,10 @@ class ServerThread(threading.Thread):
 
 @pytest.fixture(scope="module")
 def test_server():
+    provider = get_provider()
     # Mocking necessary backend functions
-    with patch("web_app.web_server.fetch_alerts", return_value=[]), \
-         patch("web_app.web_server.fetch_realtime_alerts", return_value=[]):
+    with patch.object(provider, "fetch_history_alerts", return_value=[]), \
+         patch.object(provider, "fetch_realtime_alerts", return_value=[]):
         server = ServerThread(app)
         server.start()
         yield

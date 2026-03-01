@@ -3,10 +3,13 @@ import threading
 import time
 from datetime import datetime
 from flask import Flask, jsonify, render_template, request
-from typing import List, Dict, Any, Tuple
-from oref_alert_parser.parser import OrefAlertParser, fetch_realtime_alerts, fetch_alerts
+from typing import List, Dict, Any, Tuple, Optional
+from oref_alert_parser.parser import OrefAlertParser
 from oref_alert_parser.approved_locations import APPROVED_LOCATIONS
 from oref_alert_parser.models import Alert
+from oref_alert_parser.provider import AlertProvider
+from oref_alert_parser.oref_provider import OrefProvider
+from web_app.config import config
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -16,23 +19,36 @@ history_cache: List[Alert] = []
 last_history_fetch: float = 0
 cache_lock = threading.Lock()
 
+# Alert provider instance (dependency injection)
+alert_provider: Optional[AlertProvider] = None
+
+def get_provider() -> AlertProvider:
+    """
+    Returns the configured alert provider.
+    Initializes OrefProvider if no provider is set.
+    """
+    global alert_provider
+    if alert_provider is None:
+        alert_provider = OrefProvider(
+            history_url=config.OREF_HISTORY_URL,
+            realtime_url=config.OREF_REALTIME_URL,
+            user_agent=config.USER_AGENT
+        )
+    return alert_provider
+
 def poll_realtime_alerts() -> None:
     """
     Background thread function to continuously poll for real-time alerts and history.
     Updates the in-memory caches and ensures they don't grow indefinitely.
-
-    Returns:
-        None
     """
     global realtime_alerts_cache, history_cache, last_history_fetch
+    provider = get_provider()
+    
     while True:
         try:
             # Poll Realtime
-            alerts_data = fetch_realtime_alerts()
-            if alerts_data:
-                parser = OrefAlertParser(alerts_data)
-                parsed_alerts = parser.get_alerts()
-                
+            parsed_alerts = provider.fetch_realtime_alerts()
+            if parsed_alerts:
                 with cache_lock:
                     # Merge new alerts with existing cache, avoiding duplicates
                     existing_keys = {
@@ -52,12 +68,10 @@ def poll_realtime_alerts() -> None:
                         realtime_alerts_cache.sort(key=lambda a: a.alertDate if a.alertDate else dt.min.replace(tzinfo=timezone.utc), reverse=True)
                         del realtime_alerts_cache[1000:]
 
-            # Poll History every 10 seconds or if never fetched
-            if time.time() - last_history_fetch > 10:
-                history_data = fetch_alerts()
-                if history_data:
-                    history_parser = OrefAlertParser(history_data)
-                    new_history = history_parser.get_alerts()
+            # Poll History based on configured interval or if never fetched
+            if time.time() - last_history_fetch > config.POLL_INTERVAL_HISTORY:
+                new_history = provider.fetch_history_alerts()
+                if new_history:
                     with cache_lock:
                         history_cache[:] = new_history
                     last_history_fetch = time.time()
@@ -65,16 +79,13 @@ def poll_realtime_alerts() -> None:
         except Exception as e:
             print(f"Error polling alerts: {e}")
             
-        time.sleep(2)
+        time.sleep(config.POLL_INTERVAL_REALTIME)
 
 
 @app.route('/')
 def index() -> str:
     """
     Serves the main page.
-
-    Returns:
-        The rendered index.html template.
     """
     return render_template('index.html')
 
@@ -83,9 +94,6 @@ def index() -> str:
 def alerts() -> Any:
     """
     Provides the alert data as a JSON object.
-
-    Returns:
-        A JSON response containing the list of real-time alerts.
     """
     with cache_lock:
         return jsonify([alert.to_dict() for alert in realtime_alerts_cache])
@@ -95,9 +103,6 @@ def alerts() -> Any:
 def approved_locations() -> Any:
     """
     Returns the list of approved locations.
-
-    Returns:
-        A JSON response containing the list of approved location names.
     """
     return jsonify({'locations': APPROVED_LOCATIONS})
 
@@ -106,11 +111,6 @@ def approved_locations() -> Any:
 def force_refresh() -> Any:
     """
     Forces the backend to prepare for a fresh history fetch.
-
-    Does NOT clear the cache to avoid UI flickers.
-
-    Returns:
-        A JSON response indicating success.
     """
     global last_history_fetch
     with cache_lock:
@@ -122,13 +122,6 @@ def force_refresh() -> Any:
 def all_alerts() -> Any:
     """
     Provides all historical alerts for a specific location.
-
-    Expects a 'location' query parameter. Combines real-time and historical
-    alerts, deduplicates them, and returns the most recent 50.
-
-    Returns:
-        A JSON response containing the list of filtered alerts and sync status,
-        or an error message if the location parameter is missing.
     """
     location = request.args.get('location')
     if not location:
@@ -151,25 +144,13 @@ def all_alerts() -> Any:
         elif alert.location == location:
             location_alerts.append(alert)
 
-    # Deduplicate based on ID or (date, location, threat)
-    # Since Alert object doesn't have ID, we use a unique key.
-    # We want to keep the most recent one if duplicates exist (though they should be identical usually)
+    # Deduplicate
     unique_alerts = {}
     for alert in location_alerts:
-        # Key: (date up to minute to handle slight variations, location, threat_type)
-        # Handle datetime formats
         date_key = str(alert.alertDate)[:16] if alert.alertDate else None
-        
-        # We need to flatten location for the key if it's a list and we matched one item
-        # But wait, if we are filtering by a single location string, the alert.location could be a list
-        # For deduplication, if the same alert from realtime vs history has list vs string, they might mismatch
-        # But the frontend expects `alert.location` to be something it can display.
-        # Let's just use the `location` query param as the key part since we already filtered by it.
         key = (date_key, location, alert.threat_type)
         
         if key not in unique_alerts:
-            # Create a copy or modify the alert to ensure location is a string for the frontend
-            # The frontend expects location to be a string.
             if isinstance(alert.location, list):
                 import copy
                 alert_copy = copy.copy(alert)
@@ -179,8 +160,6 @@ def all_alerts() -> Any:
                 unique_alerts[key] = alert
     
     # Sort by date descending
-    # Use datetime.min for alerts with no date so they appear last (or first if ascending, but we want reverse)
-    # Since alertDate is naive datetime (as per parser), we can use datetime.min
     from datetime import datetime as dt
     final_alerts = sorted(unique_alerts.values(), key=lambda x: x.alertDate if x.alertDate else dt.min, reverse=True)
 
@@ -191,10 +170,21 @@ def all_alerts() -> Any:
     })
 
 
-if __name__ == '__main__':
+def run_server(provider: Optional[AlertProvider] = None) -> None:
+    """
+    Starts the web server and background polling.
+    Allows injecting a custom provider.
+    """
+    global alert_provider
+    if provider:
+        alert_provider = provider
+
     # Start background polling thread
     polling_thread = threading.Thread(target=poll_realtime_alerts, daemon=True)
     polling_thread.start()
 
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host=config.SERVER_HOST, port=config.SERVER_PORT, debug=config.DEBUG)
+
+
+if __name__ == '__main__':
+    run_server()

@@ -3,9 +3,11 @@ from playwright.sync_api import Page, expect
 import json
 import os
 import threading
-from web_app.web_server import app
+from web_app.web_server import app, get_provider
 from werkzeug.serving import make_server
 from unittest.mock import patch
+import web_app.web_server as ws
+from oref_alert_parser.parser import OrefAlertParser
 
 # Central place for test dates and alerts, matching the screenshot exactly
 TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "test_data.json")
@@ -39,14 +41,13 @@ class ServerThread(threading.Thread):
 
 @pytest.fixture(scope="module")
 def test_server():
-    # Mock the backend fetch_alerts to return raw Oref data
-    with patch("web_app.web_server.fetch_alerts", return_value=RAW_OREF_DATA), \
-         patch("web_app.web_server.fetch_realtime_alerts", return_value=[]):
+    provider = get_provider()
+    # Mock the backend provider methods
+    with patch.object(provider, "fetch_history_alerts", return_value=OrefAlertParser(RAW_OREF_DATA).get_alerts()), \
+         patch.object(provider, "fetch_realtime_alerts", return_value=[]):
         
         # Manually populate the cache since the background thread is not running
-        import web_app.web_server as ws
-        from oref_alert_parser.parser import OrefAlertParser
-        ws.history_cache = OrefAlertParser(RAW_OREF_DATA).get_alerts()
+        ws.history_cache = provider.fetch_history_alerts()
         ws.last_history_fetch = 1 # Mark as fetched
         
         server = ServerThread(app)

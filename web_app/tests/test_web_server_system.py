@@ -3,23 +3,18 @@ import json
 import threading
 import time
 from datetime import datetime, timedelta
-from web_app.web_server import app, realtime_alerts_cache, history_cache, cache_lock
+import web_app.web_server as ws
 from oref_alert_parser.parser import OrefAlertParser
 from oref_alert_parser.models import Alert, AlertStatus, ThreatType
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
-    with app.test_client() as client:
+    ws.app.config['TESTING'] = True
+    with ws.app.test_client() as client:
         # Clear caches before each test
-        with cache_lock:
-            realtime_alerts_cache.clear()
-            history_cache.clear()
-        
-        # Ensure imports for tests are clean
-        import web_app.web_server
-        web_app.web_server.realtime_alerts_cache = realtime_alerts_cache
-        web_app.web_server.history_cache = history_cache
+        with ws.cache_lock:
+            ws.realtime_alerts_cache.clear()
+            ws.history_cache.clear()
         
         yield client
 
@@ -46,8 +41,8 @@ def test_get_alerts_populated(client):
         status=AlertStatus.ACTIVE,
         threat_type=ThreatType.ROCKET
     )
-    with cache_lock:
-        realtime_alerts_cache.append(test_alert)
+    with ws.cache_lock:
+        ws.realtime_alerts_cache.append(test_alert)
     
     response = client.get('/alerts')
     assert response.status_code == 200
@@ -122,9 +117,9 @@ def test_all_alerts_filtering_and_merging(client):
         threat_type=ThreatType.ROCKET
     )
 
-    with cache_lock:
-        realtime_alerts_cache.append(rt_alert)
-        history_cache.extend([hist_alert_dup, hist_alert_diff, other_loc_alert])
+    with ws.cache_lock:
+        ws.realtime_alerts_cache.append(rt_alert)
+        ws.history_cache.extend([hist_alert_dup, hist_alert_diff, other_loc_alert])
 
     response = client.get('/api/alerts/all?location=Tel Aviv')
     assert response.status_code == 200
@@ -148,8 +143,8 @@ def test_all_alerts_list_location(client):
         threat_type=ThreatType.ROCKET
     )
     
-    with cache_lock:
-        history_cache.append(alert)
+    with ws.cache_lock:
+        ws.history_cache.append(alert)
         
     response = client.get('/api/alerts/all?location=Tel Aviv')
     assert response.status_code == 200
@@ -162,7 +157,7 @@ def test_concurrency_rapid_requests(client):
     """Ensure the server remains responsive under multiple rapid requests."""
     results = []
     def make_request():
-        with app.test_client() as local_client:
+        with ws.app.test_client() as local_client:
             response = local_client.get('/api/alerts/all?location=Tel Aviv')
             results.append(response.status_code)
 
@@ -180,11 +175,21 @@ def test_concurrency_rapid_requests(client):
 
 def test_poll_realtime_alerts_integration(mocker):
     """Test the background polling logic (partially mocked)."""
-    # Mock fetch functions
-    mock_rt = mocker.patch('web_app.web_server.fetch_realtime_alerts')
-    mock_hist = mocker.patch('web_app.web_server.fetch_alerts')
+    # Mock provider methods
+    provider = ws.get_provider()
+    mock_rt = mocker.patch.object(provider, 'fetch_realtime_alerts')
+    mock_hist = mocker.patch.object(provider, 'fetch_history_alerts')
     
-    mock_rt.return_value = [{"id": "1", "category": 1, "title": "Test", "data": "Loc1", "alertDate": "2023-10-07 10:00:00"}]
+    # We need to return Alert objects since we are mocking the provider
+    alert = Alert(
+        alertDate=datetime.now(),
+        title="Test",
+        location="Loc1",
+        oref_category=1,
+        status=AlertStatus.ACTIVE,
+        threat_type=ThreatType.ROCKET
+    )
+    mock_rt.return_value = [alert]
     mock_hist.return_value = []
     
     from web_app.web_server import poll_realtime_alerts
@@ -196,14 +201,15 @@ def test_poll_realtime_alerts_integration(mocker):
         poll_realtime_alerts()
         
     # Check if cache was updated
-    with cache_lock:
-        assert len(realtime_alerts_cache) > 0
-        assert realtime_alerts_cache[0].location == "Loc1"
+    with ws.cache_lock:
+        assert len(ws.realtime_alerts_cache) > 0
+        assert ws.realtime_alerts_cache[0].location == "Loc1"
 
 def test_error_handling_invalid_data(client, mocker):
     """Test behavior when backend returns invalid data."""
-    # Mocking the fetch to return something that causes an error in poll_realtime_alerts
-    mocker.patch('web_app.web_server.fetch_realtime_alerts', side_effect=Exception("API Down"))
+    # Mocking the provider fetch to return something that causes an error in poll_realtime_alerts
+    provider = ws.get_provider()
+    mocker.patch.object(provider, 'fetch_realtime_alerts', side_effect=Exception("API Down"))
     
     from web_app.web_server import poll_realtime_alerts
     class StopLoop(Exception): pass
